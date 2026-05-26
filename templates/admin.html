@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin – Datenbankübersicht</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #1a1e24;
+            --surface:   #22272e;
+            --surface2:  #2b3038;
+            --border:    rgba(255,255,255,0.08);
+            --accent:    #ec4f0b;
+            --like:      #28a745;
+            --dislike:   #c0392b;
+            --text:      #e6eaf0;
+            --muted:     rgba(255,255,255,0.4);
+            --radius:    12px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 14px;
+            min-height: 100vh;
+        }
+
+        /* ── Top bar ── */
+        .topbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 2rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .topbar-title {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+        .topbar-title span { color: var(--accent); }
+        .topbar-back {
+            margin-left: auto;
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: color 0.15s;
+        }
+        .topbar-back:hover { color: var(--text); }
+
+        /* ── Stats bar ── */
+        .stats-bar {
+            display: flex;
+            gap: 1rem;
+            padding: 1.5rem 2rem;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem 1.5rem;
+            min-width: 140px;
+            flex: 1;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1;
+            color: var(--accent);
+        }
+        .stat-label { color: var(--muted); font-size: 0.8rem; margin-top: 0.3rem; }
+
+        /* ── Main layout ── */
+        .main { padding: 0 2rem 3rem; }
+
+        /* ── Session card ── */
+        .session-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 1.25rem;
+            overflow: hidden;
+        }
+        .session-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
+        }
+        .session-header:hover { background: var(--surface2); }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 0.25rem 0.6rem;
+            border-radius: 99px;
+        }
+        .badge-done    { background: rgba(40,167,69,0.15); color: #28a745; border: 1px solid rgba(40,167,69,0.3); }
+        .badge-pending { background: rgba(255,193,7,0.12); color: #ffc107; border: 1px solid rgba(255,193,7,0.3); }
+
+        .session-id {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+        .session-time {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-left: auto;
+        }
+        .chevron {
+            color: var(--muted);
+            transition: transform 0.2s;
+            margin-left: 0.5rem;
+        }
+        .session-card.open .chevron { transform: rotate(180deg); }
+
+        /* ── Session body ── */
+        .session-body {
+            display: none;
+            border-top: 1px solid var(--border);
+        }
+        .session-card.open .session-body { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+
+        @media (max-width: 900px) {
+            .session-card.open .session-body { grid-template-columns: 1fr; }
+        }
+
+        .section {
+            padding: 1.25rem;
+            border-right: 1px solid var(--border);
+        }
+        .section:last-child { border-right: none; }
+
+        .section-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            margin-bottom: 1rem;
+        }
+
+        /* ── Onboarding answers ── */
+        .qa-item { margin-bottom: 0.85rem; }
+        .qa-question {
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-bottom: 0.2rem;
+            line-height: 1.4;
+        }
+        .qa-answer {
+            font-size: 0.9rem;
+            color: var(--text);
+            line-height: 1.4;
+        }
+
+        /* ── Swipes ── */
+        .swipe-list { display: flex; flex-direction: column; gap: 0.35rem; }
+        .swipe-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.85rem;
+            padding: 0.3rem 0;
+        }
+        .swipe-nr {
+            font-size: 0.7rem;
+            color: var(--muted);
+            width: 20px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .swipe-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            flex-shrink: 0;
+        }
+        .swipe-icon.like    { background: rgba(40,167,69,0.15);  color: var(--like); }
+        .swipe-icon.dislike { background: rgba(192,57,43,0.15);  color: var(--dislike); }
+        .swipe-city { flex: 1; }
+        .swipe-city-name { font-weight: 600; }
+        .swipe-city-country { font-size: 0.75rem; color: var(--muted); }
+        .swipe-continent {
+            font-size: 0.7rem;
+            color: var(--muted);
+            background: var(--surface2);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        /* ── Results ── */
+        .result-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .result-item:last-child { border-bottom: none; }
+        .result-medal { font-size: 1.5rem; flex-shrink: 0; }
+        .result-city-name { font-size: 1rem; font-weight: 700; }
+        .result-city-country { font-size: 0.8rem; color: var(--muted); }
+        .result-score {
+            margin-left: auto;
+            font-size: 0.8rem;
+            color: var(--accent);
+            font-weight: 700;
+            background: rgba(236,79,11,0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+        .no-data { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+
+        /* ── Summary chips in header ── */
+        .header-chips {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .chip {
+            font-size: 0.72rem;
+            color: var(--muted);
+            background: var(--surface2);
+            padding: 0.2rem 0.55rem;
+            border-radius: 99px;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .chip .like-dot    { width: 6px; height: 6px; border-radius: 50%; background: var(--like); flex-shrink: 0; }
+        .chip .dislike-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dislike); flex-shrink: 0; }
+
+        /* ── Empty state ── */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--muted);
+        }
+        .empty-state i { font-size: 3rem; margin-bottom: 1rem; display: block; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-title"><span>citytrip</span> · Admin</div>
+    <a class="topbar-back" href="/"><i class="fa fa-arrow-left"></i> Zurück zur App</a>
+</div>
+
+{% set total     = sessions | length %}
+{% set completed = sessions | selectattr("completed") | list | length %}
+{% set ns_swipes = namespace(count=0) %}
+{% for s in sessions %}{% set ns_swipes.count = ns_swipes.count + (s.swipes | length) %}{% endfor %}
+
+<div class="stats-bar">
+    <div class="stat-card">
+        <div class="stat-value">{{ total }}</div>
+        <div class="stat-label">Sessions gesamt</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ completed }}</div>
+        <div class="stat-label">Abgeschlossen</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total - completed }}</div>
+        <div class="stat-label">Offen / abgebrochen</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ ns_swipes.count }}</div>
+        <div class="stat-label">Swipes gesamt</div>
+    </div>
+</div>
+
+<div class="main">
+
+{% if sessions %}
+    {% for s in sessions %}
+    {% set likes    = s.swipes | selectattr("choice", "eq", "like")    | list | length %}
+    {% set dislikes = s.swipes | selectattr("choice", "eq", "dislike") | list | length %}
+    <div class="session-card" id="card-{{ loop.index }}">
+
+        <div class="session-header" onclick="toggle('card-{{ loop.index }}')">
+            <span class="badge {{ 'badge-done' if s.completed else 'badge-pending' }}">
+                <i class="fa {{ 'fa-check' if s.completed else 'fa-clock-o' }}"></i>
+                {{ 'Fertig' if s.completed else 'Offen' }}
+            </span>
+
+            <span class="session-id">{{ s.id[:8] }}…{{ s.id[-4:] }}</span>
+
+            <div class="header-chips">
+                {% if s.swipes %}
+                <span class="chip"><span class="like-dot"></span>{{ likes }}</span>
+                <span class="chip"><span class="dislike-dot"></span>{{ dislikes }}</span>
+                {% endif %}
+                {% if s.results %}
+                <span class="chip"><i class="fa fa-trophy"></i>&nbsp;{{ s.results[0].city }}</span>
+                {% endif %}
+            </div>
+
+            <span class="session-time">{{ s.created_at[:16].replace("T", " ") }}</span>
+            <i class="fa fa-chevron-down chevron"></i>
+        </div>
+
+        <div class="session-body">
+
+            <!-- Onboarding -->
+            <div class="section">
+                <div class="section-title"><i class="fa fa-list-ul"></i>&nbsp; Onboarding</div>
+                {% if s.onboarding %}
+                    {% for a in s.onboarding %}
+                    <div class="qa-item">
+                        <div class="qa-question">{{ a.nr }}. {{ a.question }}</div>
+                        <div class="qa-answer">{{ a.answer }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="no-data">Keine Antworten gespeichert</p>
+                {% endif %}
+            </div>
+
+            <!-- Swipes -->
+            <div class="section">
+                <div class="section-title"><i class="fa fa-hand-o-right"></i>&nbsp; Swipes ({{ s.swipes | length }})</div>
+                {% if s.swipes %}
+                <div class="swipe-list">
+                    {% for sw in s.swipes %}
+                    <div class="swipe-item">
+                        <span class="swipe-nr">{{ sw.iteration }}</span>
+                        <span class="swipe-icon {{ sw.choice }}">
+                            <i class="fa {{ 'fa-heart' if sw.choice == 'like' else 'fa-times' }}"></i>
+                        </span>
+                        <div class="swipe-city">
+                            <div class="swipe-city-name">{{ sw.city }}</div>
+                            <div class="swipe-city-country">{{ sw.country }}</div>
+                        </div>
+                        <span class="swipe-continent">{{ sw.continent }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                    <p class="no-data">Keine Swipes</p>
+                {% endif %}
+            </div>
+
+            <!-- Results -->
+            <div class="section">
+                <div class="section-title"><i class="fa fa-trophy"></i>&nbsp; Ergebnisse</div>
+                {% if s.results %}
+                    {% set medals = ["🥇", "🥈", "🥉"] %}
+                    {% for r in s.results %}
+                    <div class="result-item">
+                        <span class="result-medal">{{ medals[r.rank - 1] }}</span>
+                        <div>
+                            <div class="result-city-name">{{ r.city }}</div>
+                            <div class="result-city-country">{{ r.country }}</div>
+                        </div>
+                        <span class="result-score">{{ "%.1f"|format(r.score) }}</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="no-data">Noch keine Ergebnisse</p>
+                {% endif %}
+            </div>
+
+        </div><!-- session-body -->
+    </div><!-- session-card -->
+    {% endfor %}
+
+{% else %}
+    <div class="empty-state">
+        <i class="fa fa-database"></i>
+        Noch keine Sessions in der Datenbank.
+    </div>
+{% endif %}
+
+</div><!-- main -->
+
+<script>
+function toggle(id) {
+    document.getElementById(id).classList.toggle('open');
+}
+// Erste Session direkt aufklappen
+document.addEventListener('DOMContentLoaded', () => {
+    const first = document.querySelector('.session-card');
+    if (first) first.classList.add('open');
+});
+</script>
+</body>
+</html>

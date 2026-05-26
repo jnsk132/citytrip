@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Dein Reiseziel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="static/results-style.css">
+</head>
+<body>
+
+    <div class="hero-container">
+        <h1 class="hero-text">Dein perfektes Reiseziel ist...</h1>
+        <a href="#content" class="scroll-arrow">
+            <i class="fa fa-chevron-down"></i>
+        </a>
+    </div>
+
+    <div id="content">
+        {% for city in cities %}
+        <div class="image-wrapper">
+            <div class="image-container">
+                <p class="rank-badge">#{{loop.index}}</p>
+                <img class="cropped_img" src="static/Alle_Stadt_Bilder/{{city[11]}}.jpg" alt="Stadtbild">
+                <div class="gradient-overlay"></div>
+                <div class="image-content">
+                    <h1 class="city_text">{{city[0]}}</h1>
+                    <p class="country_text">{{city[1]}}</p>
+                </div>
+            </div>
+        </div>
+        <div class="descriptive-container">
+            <p class="descriptive-text">{{ city[18] }}</p>
+        </div>
+        {% endfor %}
+
+    <!-- KI BLOCK ANFANG-->
+    <div class="preferences-section">
+        <div class="descriptive-container">
+            <h1 class="title">Deine Analyse: Was dir wirklich wichtig ist</h1>
+        </div>
+
+        <div class="preferences-grid">
+            {% for item in sd %}
+            <div class="pref-card {{ 'high-importance' if item.is_high else '' }}">
+                <div class="pref-header">
+                    </div>
+                <h3>{{ item.title }}</h3>
+                <p>{{ item.desc }}</p>
+                <div class="progress-wrapper">
+                    <div class="progress-label">Relevanz für dich</div>
+                    <div class="custom-progress">
+                        <div class="progress-bar-fill" style="width: {{ item.value }}%;"></div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if img_b64 %}
+        <div class="button-wrapper">
+            <button class="restart-btn" onclick="document.getElementById('qr-overlay').style.display='flex'">QR-Code anzeigen</button>
+        </div>
+
+        <div id="qr-overlay" onclick="this.style.display='none'" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:1000; justify-content:center; align-items:center; cursor:pointer;">
+            <img src='data:image/jpeg;base64, {{img_b64}}' style='width:min(90vw,90vh); height:min(90vw,90vh); object-fit:contain;'>
+        </div>
+        {% endif %}
+
+        <div class="button-wrapper">
+            <a href="/" class="restart-btn">Nochmal versuchen</a>
+        </div>
+    </div>

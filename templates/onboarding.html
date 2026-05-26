@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <title>Reiseziel Finder</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { background: #292F36; }
+
+        body {
+            background: #292F36;
+            font-family: sans-serif;
+            height: 100vh;
+            height: -webkit-fill-available;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 0;
+            color: white;
+            overflow: hidden;
+        }
+
+        /* ═══════════════════════════════════════════
+           ONBOARDING
+        ═══════════════════════════════════════════ */
+        #onboarding-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            will-change: opacity, transform;
+        }
+
+        #onboarding-section {
+            flex: 1;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 1.5rem 2rem;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            width: 100%;
+            max-width: 480px;
+            animation: fadeUp 0.35s ease;
+        }
+        .screen.active { display: flex; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .screen-emoji {
+            font-size: clamp(3rem, 14vmin, 5rem);
+            margin-bottom: 1.5rem;
+            line-height: 1;
+        }
+        .screen-title {
+            font-size: clamp(1.4rem, 5vmin, 2rem);
+            font-weight: bold;
+            line-height: 1.3;
+            margin-bottom: 0.75rem;
+        }
+        .screen-subtitle {
+            font-size: clamp(0.9rem, 3vmin, 1.1rem);
+            color: rgba(255,255,255,0.55);
+            line-height: 1.6;
+            margin-bottom: 2.5rem;
+            max-width: 340px;
+        }
+        .highlight { color: #ec4f0b; font-weight: bold; }
+
+        .btn-next {
+            padding: 1rem 2.5rem;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #000;
+            background: #f8f9fa;
+            border: none;
+            border-radius: 2rem;
+            cursor: pointer;
+            box-shadow: 10px 10px 40px rgba(28,28,28,0.5);
+            transition: background 0.2s, transform 0.1s;
+            display: inline-block;
+        }
+        .btn-next:hover  { background: #e2e6ea; }
+        .btn-next:active { transform: scale(0.97); }
+
+        /* Dots */
+        .dots { display: flex; gap: 0.5rem; margin-bottom: 1.75rem; }
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: background 0.25s;
+        }
+        .dot.active { background: #ec4f0b; }
+
+        /* Question */
+        .question-counter {
+            font-size: clamp(0.8rem, 2.5vmin, 0.95rem);
+            color: rgba(255,255,255,0.35);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        .question-text {
+            font-size: clamp(1.1rem, 4vmin, 1.5rem);
+            font-weight: bold;
+            line-height: 1.4;
+            margin-bottom: 1.75rem;
+        }
+        .answers { display: flex; flex-direction: column; gap: 0.75rem; width: 100%; }
+        .answer-card {
+            background: rgba(255,255,255,0.07);
+            border: 1.5px solid rgba(255,255,255,0.12);
+            border-radius: 1rem;
+            padding: 0.9rem 1.2rem;
+            font-size: clamp(0.9rem, 3vmin, 1rem);
+            color: white;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.15s, border-color 0.15s, transform 0.1s;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .answer-card:hover  { background: rgba(255,255,255,0.13); border-color: rgba(255,255,255,0.25); }
+        .answer-card:active { transform: scale(0.98); }
+        .answer-card.selected { background: rgba(236,79,11,0.2); border-color: #ec4f0b; }
+
+        /* Outro swipe demo */
+        .swipe-demo {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        .demo-card {
+            width: 90px; height: 90px;
+            border-radius: 1rem;
+            background: rgba(255,255,255,0.08);
+            border: 1.5px solid rgba(255,255,255,0.15);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.3rem;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+        }
+        .demo-card i { font-size: 1.5rem; }
+        .demo-card.like-demo    { border-color: rgba(40,167,69,0.5); }
+        .demo-card.like-demo i  { color: #28a745; }
+        .demo-card.dislike-demo   { border-color: rgba(167,40,40,0.5); }
+        .demo-card.dislike-demo i { color: #a72828; }
+        .swipe-arrow { font-size: 1.8rem; color: rgba(255,255,255,0.35); }
+
+        /* ═══════════════════════════════════════════
+           QUIZ  (fixed overlay, fades in on top)
+        ═══════════════════════════════════════════ */
+        #quiz-section {
+            position: fixed;
+            inset: 0;
+            background: #292F36;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+        #quiz-section.active {
+            opacity: 1;
+            pointer-events: all;
+            touch-action: none;
+        }
+
+        /* Header */
+        .header-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 1.5rem 2rem 0;
+            position: relative;
+        }
+        .return-button {
+            position: absolute;
+            left: 1.5rem;
+            color: white;
+            font-size: clamp(1.2rem, 5vmin, 2rem);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.5rem;
+            margin: -0.5rem;
+            transition: color 0.3s;
+        }
+        .return-button:hover { color: rgb(200,200,200); }
+        .top-text { font-size: clamp(1rem, 4vmin, 1.5rem); margin: 0; }
+
+        /* Progress */
+        .progress-container { width: min(75%, 600px); margin-top: 1.5rem; }
+        .progress-bar-text {
+            text-align: right;
+            margin-bottom: 0.5rem;
+            font-size: clamp(0.9rem, 2.5vmin, 1.1rem);
+        }
+        .progress-wrapper {
+            background-color: #e9ecef;
+            border-radius: 1vh;
+            height: clamp(6px, 1.5vh, 12px);
+            width: 100%;
+            overflow: hidden;
+            box-shadow: 10px 10px 40px rgba(28,28,28,0.562);
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #ec4f0b;
+            border-radius: 1vh;
+            transition: width 0.4s ease;
+        }
+
+        /* City card */
+        .main-content {
+            margin-top: clamp(1.5rem, 4vh, 3rem);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            flex: 1;
+        }
+        .img-wrapper {
+            position: relative;
+            width: fit-content;
+            border-radius: 2rem;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: transform 0.25s ease, opacity 0.25s ease;
+            will-change: transform, opacity;
+        }
+        .img-wrapper.dragging { transition: none; }
+        .cropped_img {
+            width: min(80vw, 800px);
+            height: 60vh;
+            object-fit: cover;
+            object-position: center;
+            display: block;
+            pointer-events: none;
+        }
+        .swipe-hint {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: clamp(2rem, 8vmin, 4rem);
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .swipe-hint.like    { right: 1.5rem; color: #28a745; }
+        .swipe-hint.dislike { left:  1.5rem; color: #a72828; }
+        .gradient-overlay {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 30%;
+            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
+            border-radius: 0 0 2rem 2rem;
+            pointer-events: none;
+        }
+        .text-overlay {
+            position: absolute;
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            width: 100%;
+            pointer-events: none;
+        }
+        .city_text    { font-size: clamp(1.5rem, 7vmin, 3.5rem); margin: 0; color: #f8f9fa; }
+        .country_text { font-size: clamp(1rem, 4vmin, 2rem);    margin: 0; color: #f8f9fa; }
+
+        /* Buttons */
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: clamp(2rem, 8vw, 5rem);
+            margin-top: clamp(1.5rem, 3vh, 3rem);
+            padding-bottom: max(2rem, env(safe-area-inset-bottom, 1rem) + 1.5rem);
+        }
+        .button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            background: transparent;
+            border: none;
+            font-size: clamp(2rem, 9vmin, 4rem);
+            border-radius: 50%;
+            height: clamp(64px, 18vmin, 110px);
+            width: clamp(64px, 18vmin, 110px);
+            cursor: pointer;
+            box-shadow: 10px 10px 40px rgba(28,28,28,0.556);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .button:active { transform: scale(0.92); box-shadow: 4px 4px 20px rgba(28,28,28,0.4); }
+        @media (hover: hover) { .button:hover { transform: translateY(-8px); } }
+        .like-button    { border: 5px solid #28a745; background: rgba(40,167,69,0.1); }
+        .dislike-button { border: 5px solid #a72828; background: rgba(167,40,40,0.1); }
+        .fa-heart { color: #28a745; }
+        .fa-times  { color: #a72828; }
+
+        .swipe-tip {
+            position: absolute;
+            bottom: calc(clamp(64px, 18vmin, 110px) + max(2rem, 2.5rem) + 0.5rem);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            color: white;
+            font-size: clamp(0.95rem, 3vmin, 1.15rem);
+            text-align: center;
+            line-height: 1.6;
+            text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+            pointer-events: none;
+            white-space: nowrap;
+            display: none;
+        }
+
+        @keyframes swipeHint {
+            0%   { transform: translateX(0) rotate(0deg); }
+            20%  { transform: translateX(-18px) rotate(-2deg); }
+            50%  { transform: translateX(18px) rotate(2deg); }
+            80%  { transform: translateX(-10px) rotate(-1deg); }
+            100% { transform: translateX(0) rotate(0deg); }
+        }
+        .img-wrapper.hint-anim { animation: swipeHint 0.7s ease-in-out; }
+
+        #swipeColor {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 6;
+            opacity: 0;
+        }
+
+        /* Result loader */
+        #resultOverlay {
+            position: fixed;
+            inset: 0;
+            background: #292F36;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+        #resultOverlay.active { opacity: 1; pointer-events: all; }
+        .loader-icon {
+            font-size: clamp(3rem, 12vmin, 5rem);
+            color: #ec4f0b;
+            margin-bottom: 2rem;
+            animation: spin 3s linear infinite;
+        }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .loader-headline { font-size: clamp(1.2rem, 4vmin, 1.8rem); color: white; font-weight: bold; margin-bottom: 0.5rem; }
+        .loader-status   { font-size: clamp(0.85rem, 2.5vmin, 1rem); color: rgba(255,255,255,0.5); margin-bottom: 2.5rem; min-height: 1.4em; transition: opacity 0.45s ease-in-out; }
+        .loader-bar-track { width: min(80vw, 340px); height: 6px; background: rgba(255,255,255,0.1); border-radius: 99px; overflow: hidden; }
+        .loader-bar-fill  { height: 100%; width: 0%; background: #ec4f0b; border-radius: 99px; transition: width 0.6s ease; }
+
+        /* Landscape */
+        @media (orientation: landscape) and (max-height: 600px) {
+            .header-container  { padding-top: 0.75rem; }
+            .progress-container { margin-top: 0.5rem; }
+            .main-content      { margin-top: 0.75rem; flex: none; }
+            .cropped_img       { height: 44vh; }
+            .button-container  { margin-top: 0.75rem; padding-bottom: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════════════
+         ONBOARDING
+    ═══════════════════════════════════════════ -->
+    <div id="onboarding-wrapper">
+
+    <header class="header-container">
+        <button class="return-button" onclick="goBack()">
+            <i class="fa fa-arrow-left"></i>
+        </button>
+        <h1 class="top-text">Finde dein Reiseziel</h1>
+    </header>
+
+    <div id="onboarding-section">
+
+        <!-- Intro -->
+        <div class="screen active" id="screen-intro">
+            <div class="screen-emoji">✈️</div>
+            <h1 class="screen-title">Kurz bevor's losgeht –</h1>
+            <p class="screen-subtitle">
+                <span class="highlight">Ein paar kurze Fragen.</span><br>
+                Keine richtigen Antworten, nur ein bisschen Spaß.
+            </p>
+            <button class="btn-next" onclick="showScreen('screen-q1')">Weiter</button>
+        </div>
+
+        <!-- Frage 1 -->
+        <div class="screen" id="screen-q1">
+            <div class="dots">
+                <div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+            <p class="question-counter">Frage 1 von 6</p>
+            <h2 class="question-text">Are there more eyes or legs on the planet?</h2>
+            <div class="answers">
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q2')">👀 &nbsp;More eyes</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q2')">🦵 &nbsp;More legs</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q2')">🤷 &nbsp;Keine Ahnung, klingt nach einer Fangfrage</div>
+            </div>
+        </div>
+
+        <!-- Frage 2 -->
+        <div class="screen" id="screen-q2">
+            <div class="dots">
+                <div class="dot"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+            <p class="question-counter">Frage 2 von 6</p>
+            <h2 class="question-text">Wie viele Länder gibt es in Nordamerika?</h2>
+            <div class="answers">
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q3')">3</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q3')">7</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q3')">23</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q3')">41</div>
+            </div>
+        </div>
+
+        <!-- Frage 3 -->
+        <div class="screen" id="screen-q3">
+            <div class="dots">
+                <div class="dot"></div><div class="dot"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+            <p class="question-counter">Frage 3 von 6</p>
+            <h2 class="question-text">Du stehst einem Grizzlybär gegenüber, der dich gleich angreift. Was wählst du?</h2>
+            <div class="answers">
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q4')">🏏 &nbsp;Baseballschläger</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q4')">🥊 &nbsp;Schlagringe</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q4')">🍲 &nbsp;Kleiner Topf mit kochendem Wasser</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q4')">🌟 &nbsp;Ninja-Stern</div>
+            </div>
+        </div>
+
+        <!-- Frage 4 -->
+        <div class="screen" id="screen-q4">
+            <div class="dots">
+                <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+            <p class="question-counter">Frage 4 von 6</p>
+            <h2 class="question-text">Würdest du lieber 1 € für jedes Kompliment bekommen oder 30 € für jede Beleidigung?</h2>
+            <div class="answers">
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q5')">😇 &nbsp;1 € pro Kompliment – ich bin von Natur aus nett</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q5')">😈 &nbsp;30 € pro Beleidigung – ich brauche das Geld</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q5')">🤔 &nbsp;Kommt drauf an, wen ich gerade beleidigen darf</div>
+            </div>
+        </div>
+
+        <!-- Frage 5 -->
+        <div class="screen" id="screen-q5">
+            <div class="dots">
+                <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot active"></div><div class="dot"></div>
+            </div>
+            <p class="question-counter">Frage 5 von 6</p>
+            <h2 class="question-text">Wie schläfst du?</h2>
+            <div class="answers">
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q6')">🙆 &nbsp;Auf dem Rücken</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q6')">🫄 &nbsp;Auf der Seite</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q6')">🫃 &nbsp;Auf dem Bauch</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-q6')">🌀 &nbsp;Komplett chaotisch, jede Nacht anders</div>
+            </div>
+        </div>
+
+        <!-- Frage 6 -->
+        <div class="screen" id="screen-q6">
+            <div class="dots">
+                <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot active"></div>
+            </div>
+            <p class="question-counter">Frage 6 von 6</p>
+            <h2 class="question-text">Hast du ungelesene E-Mails?</h2>
+            <div class="answers">
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-outro')">✅ &nbsp;Null – ich lese und lösche sofort</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-outro')">📬 &nbsp;Unter 50, ich hab's im Griff</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-outro')">📫 &nbsp;Über 1.000, ich hab aufgehört zu zählen</div>
+                <div class="answer-card" onclick="selectAnswer(this, 'screen-outro')">💀 &nbsp;Über 10.000 – Postfach ist eine Katastrophe</div>
+            </div>
+        </div>
+
+        <!-- Outro -->
+        <div class="screen" id="screen-outro">
+            <div class="screen-emoji">🗺️</div>
+            <h1 class="screen-title">Gut gemacht!</h1>
+            <div class="swipe-demo">
+                <div class="demo-card dislike-demo">
+                    <i class="fa fa-times"></i>
+                    <span>Links</span>
+                </div>
+                <span class="swipe-arrow">⟵&nbsp;&nbsp;⟶</span>
+                <div class="demo-card like-demo">
+                    <i class="fa fa-heart"></i>
+                    <span>Rechts</span>
+                </div>
+            </div>
+            <p class="screen-subtitle">
+                Jetzt kommen <span class="highlight">20 Städte</span>.<br>
+                Swipe rechts, wenn sie dich anspricht –<br>
+                links, wenn sie es nicht tut.
+            </p>
+            <button class="btn-next" id="startBtn" onclick="startQuiz()">Los geht's! 🚀</button>
+        </div>
+
+    </div><!-- end #onboarding-section -->
+    </div><!-- end #onboarding-wrapper -->
+
+
+    <!-- ═══════════════════════════════════════════
+         QUIZ  (fixed overlay, fades in on top)
+    ═══════════════════════════════════════════ -->
+    <div id="quiz-section">
+
+        <div id="resultOverlay">
+            <i class="fa fa-globe loader-icon"></i>
+            <p class="loader-headline">Berechne dein perfektes Reiseziel</p>
+            <p class="loader-status" id="loaderStatus">Starte Analyse...</p>
+            <div class="loader-bar-track">
+                <div class="loader-bar-fill" id="loaderBar"></div>
+            </div>
+        </div>
+
+        <header class="header-container">
+            <button class="return-button" onclick="backToOnboarding()">
+                <i class="fa fa-arrow-left"></i>
+            </button>
+            <h1 class="top-text">Finde dein Reiseziel</h1>
+        </header>
+
+        <div class="progress-container">
+            <p class="progress-bar-text" id="progressText">1 / 20</p>
+            <div class="progress-wrapper">
+                <div class="progress-bar-fill" id="progressFill" style="width: 5%;"></div>
+            </div>
+        </div>
+
+        <main class="main-content">
+            <div class="img-wrapper" id="imgWrapper">
+                <img class="cropped_img" id="cityImg" src="" alt="Stadtbild" draggable="false">
+                <div id="swipeColor"></div>
+                <span class="swipe-hint like"    id="hintLike"><i class="fa fa-heart"></i></span>
+                <span class="swipe-hint dislike" id="hintDislike"><i class="fa fa-times"></i></span>
+                <div class="gradient-overlay"></div>
+                <div class="text-overlay">
+                    <h1 class="city_text"    id="cityName"></h1>
+                    <p  class="country_text" id="countryName"></p>
+                </div>
+            </div>
+        </main>
+
+        <p class="swipe-tip" id="swipeTip">← Swipen oder Buttons nutzen →</p>
+
+        <footer class="button-container">
+            <button class="button dislike-button" onclick="submitChoice('dislike')">
+                <i class="fa fa-times"></i>
+            </button>
+            <button class="button like-button" onclick="submitChoice('like')">
+                <i class="fa fa-heart"></i>
+            </button>
+        </footer>
+
+    </div><!-- end #quiz-section -->
+
+
+    <script>
+    // ─────────────────────────────────────────────────
+    //  ONBOARDING
+    // ─────────────────────────────────────────────────
+    const screenOrder = [
+        'screen-intro',
+        'screen-q1', 'screen-q2', 'screen-q3',
+        'screen-q4', 'screen-q5', 'screen-q6',
+        'screen-outro'
+    ];
+
+    const questionTexts = {
+        'screen-q1': 'Are there more eyes or legs on the planet?',
+        'screen-q2': 'Wie viele Länder gibt es in Nordamerika?',
+        'screen-q3': 'Du stehst einem Grizzlybär gegenüber, der dich gleich angreift. Was wählst du?',
+        'screen-q4': 'Würdest du lieber 1 € für jedes Kompliment bekommen oder 30 € für jede Beleidigung?',
+        'screen-q5': 'Wie schläfst du?',
+        'screen-q6': 'Hast du ungelesene E-Mails?',
+    };
+
+    const collectedAnswers = {};
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function selectAnswer(el, nextScreen) {
+        const currentScreen = document.querySelector('.screen.active');
+        if (currentScreen && questionTexts[currentScreen.id]) {
+            const qNr = parseInt(currentScreen.id.replace('screen-q', ''));
+            collectedAnswers[qNr] = {
+                question_nr: qNr,
+                question: questionTexts[currentScreen.id],
+                answer: el.textContent.trim(),
+            };
+        }
+        el.classList.add('selected');
+        setTimeout(() => showScreen(nextScreen), 280);
+    }
+
+    function goBack() {
+        const current = document.querySelector('.screen.active');
+        const idx = screenOrder.indexOf(current?.id);
+        if (idx <= 0) {
+            window.location.href = '/';
+        } else {
+            showScreen(screenOrder[idx - 1]);
+        }
+    }
+
+    // ─────────────────────────────────────────────────
+    //  TRANSITION: Onboarding → Quiz
+    // ─────────────────────────────────────────────────
+    async function startQuiz() {
+        const btn = document.getElementById('startBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Laden...';
+
+        // Onboarding-Antworten speichern
+        const answers = Object.values(collectedAnswers);
+        if (answers.length > 0) {
+            try {
+                await fetch('/onboarding/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ answers }),
+                });
+            } catch { /* ignorieren */ }
+        }
+
+        let data;
+        try {
+            const res = await fetch('/quiz/init');
+            if (!res.ok) throw new Error();
+            data = await res.json();
+        } catch {
+            window.location.href = '/quiz';
+            return;
+        }
+
+        // Populate quiz DOM before showing it
+        document.getElementById('cityName').textContent     = data.city_name;
+        document.getElementById('countryName').textContent  = data.country_name;
+        document.getElementById('progressText').textContent = `${data.iteration} / 20`;
+        document.getElementById('progressFill').style.width = `${(data.iteration / 20) * 100}%`;
+
+        // Preload city image so it's ready instantly
+        await new Promise(resolve => {
+            const img = new Image();
+            img.onload = img.onerror = resolve;
+            img.src = data.file_path;
+        });
+        document.getElementById('cityImg').src = data.file_path;
+        prefetchImage(data.prefetch_path);
+
+        // Fade out onboarding
+        const onb = document.getElementById('onboarding-wrapper');
+        onb.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+        onb.style.opacity    = '0';
+        onb.style.transform  = 'scale(0.96)';
+
+        // Fade in quiz after onboarding is gone
+        setTimeout(() => {
+            onb.style.display = 'none';
+            document.getElementById('quiz-section').classList.add('active');
+            history.pushState({}, '', '/quiz');
+        }, 360);
+    }
+
+    // ─────────────────────────────────────────────────
+    //  TRANSITION: Quiz → Onboarding (back button)
+    // ─────────────────────────────────────────────────
+    function backToOnboarding() {
+        const quiz = document.getElementById('quiz-section');
+        const onb  = document.getElementById('onboarding-wrapper');
+
+        quiz.classList.remove('active');
+
+        onb.style.transition = 'none';
+        onb.style.opacity    = '0';
+        onb.style.transform  = 'scale(0.96)';
+        onb.style.display    = '';
+
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            onb.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+            onb.style.opacity    = '1';
+            onb.style.transform  = 'scale(1)';
+        }));
+
+        history.pushState({}, '', '/onboarding');
+    }
+
+    // ─────────────────────────────────────────────────
+    //  QUIZ LOGIC
+    // ─────────────────────────────────────────────────
+    const swipeColor  = document.getElementById('swipeColor');
+    const wrapper     = document.getElementById('imgWrapper');
+    const cityImg     = document.getElementById('cityImg');
+    const cityName    = document.getElementById('cityName');
+    const countryName = document.getElementById('countryName');
+    const progressTxt = document.getElementById('progressText');
+    const progressFill= document.getElementById('progressFill');
+    const hintLike    = document.getElementById('hintLike');
+    const hintDislike = document.getElementById('hintDislike');
+
+    let busy = false;
+
+    function prefetchImage(src) {
+        if (!src) return;
+        const img = new Image();
+        img.src = src;
+    }
+
+    async function submitChoice(choice) {
+        if (busy) return;
+        busy = true;
+
+        const dir = choice === 'like' ? 1 : -1;
+        wrapper.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+        wrapper.style.transform  = `translateX(${dir * 120}px) rotate(${dir * 8}deg)`;
+        wrapper.style.opacity    = '0';
+
+        let data;
+        try {
+            const res = await fetch('/quiz/next', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ choice }),
+            });
+            data = await res.json();
+        } catch {
+            window.location.href = `/quiz?choice=${choice}`;
+            return;
+        }
+
+        if (data.redirect) {
+            showResultLoader(data.redirect);
+            return;
+        }
+
+        await new Promise(resolve => {
+            const img = new Image();
+            img.onload = img.onerror = resolve;
+            img.src = data.file_path;
+        });
+
+        cityImg.src              = data.file_path;
+        cityName.textContent     = data.city_name;
+        countryName.textContent  = data.country_name;
+        progressTxt.textContent  = `${data.iteration} / 20`;
+        progressFill.style.width = `${(data.iteration / 20) * 100}%`;
+
+        wrapper.style.transition = 'none';
+        wrapper.style.transform  = 'translateY(40px) scale(0.9)';
+        wrapper.style.opacity    = '0';
+        wrapper.offsetHeight;
+        wrapper.style.transition = 'transform 0.22s ease-out, opacity 0.22s ease-out';
+        wrapper.style.transform  = 'translateY(0) scale(1)';
+        wrapper.style.opacity    = '1';
+
+        prefetchImage(data.prefetch_path);
+
+        setTimeout(() => { busy = false; }, 240);
+    }
+
+    // Touch swipe
+    let startX = 0, startY = 0, currentX = 0, dragging = false, axis = null;
+    const THRESHOLD = 60, AXIS_LOCK = 10;
+
+    wrapper.addEventListener('touchstart', e => {
+        if (busy) return;
+        startX = currentX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        dragging = true; axis = null;
+    }, { passive: true });
+
+    wrapper.addEventListener('touchmove', e => {
+        if (!dragging) return;
+        currentX = e.touches[0].clientX;
+        const dx = currentX - startX;
+        const dy = e.touches[0].clientY - startY;
+
+        if (!axis && (Math.abs(dx) > AXIS_LOCK || Math.abs(dy) > AXIS_LOCK)) {
+            axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        }
+        if (axis === 'x') {
+            e.preventDefault();
+            wrapper.style.transition = 'none';
+            wrapper.style.transform  = `translateX(${dx * 0.4}px) rotate(${dx * 0.03}deg)`;
+            hintLike.style.opacity    = dx > 20  ? Math.min((dx  - 20) / 60, 1) : 0;
+            hintDislike.style.opacity = dx < -20 ? Math.min((-dx - 20) / 60, 1) : 0;
+            const intensity = Math.min(Math.abs(dx) / 160, 0.75);
+            swipeColor.style.background = dx > 0
+                ? 'linear-gradient(to left,  rgba(40,167,69,0.8),  transparent)'
+                : 'linear-gradient(to right, rgba(167,40,40,0.8), transparent)';
+            swipeColor.style.opacity = Math.abs(dx) > 10 ? intensity : 0;
+        }
+    }, { passive: false });
+
+    wrapper.addEventListener('touchend', () => {
+        if (!dragging) return;
+        dragging = false;
+        hintLike.style.opacity = hintDislike.style.opacity = 0;
+        swipeColor.style.opacity = 0;
+        if (axis === 'x') {
+            const delta = currentX - startX;
+            if (Math.abs(delta) >= THRESHOLD) {
+                submitChoice(delta > 0 ? 'like' : 'dislike');
+            } else {
+                wrapper.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+                wrapper.style.transform  = 'translateX(0) rotate(0deg)';
+            }
+        }
+        axis = null;
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+        if (!document.getElementById('quiz-section').classList.contains('active')) return;
+        if (e.key === 'ArrowRight' || e.key === 'l') submitChoice('like');
+        if (e.key === 'ArrowLeft'  || e.key === 'h') submitChoice('dislike');
+    });
+
+    // Result loader
+    function showResultLoader(url) {
+        const overlay = document.getElementById('resultOverlay');
+        const status  = document.getElementById('loaderStatus');
+        const bar     = document.getElementById('loaderBar');
+        const steps   = [
+            { text: 'Analysiere deine Präferenzen...',  progress: 25 },
+            { text: 'Durchsuche 190 Städte weltweit...', progress: 60 },
+            { text: 'Letzte Optimierungen laufen...',    progress: 90 },
+        ];
+        overlay.classList.add('active');
+        let i = 0;
+        function nextStep() {
+            if (i < steps.length) {
+                status.style.opacity = '0';
+                setTimeout(() => {
+                    status.textContent   = steps[i].text;
+                    bar.style.width      = steps[i].progress + '%';
+                    i++;
+                    status.style.opacity = '1';
+                    setTimeout(nextStep, 2600);
+                }, 500);
+            } else {
+                bar.style.width = '100%';
+                status.style.opacity = '0';
+                setTimeout(() => { window.location.href = url; }, 650);
+            }
+        }
+        setTimeout(nextStep, 900);
+    }
+    </script>
+
+</body>
+</html>

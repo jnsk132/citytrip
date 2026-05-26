@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="de">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <title>Reiseziel Finder - Start</title>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <style>
+            /* Basis-Styles & Reset */
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            html {
+                background: #292F36;
+            }
+
+            body {
+                background: linear-gradient(0deg, #292F36 40%, #ec4f0b 100%);
+                background-repeat: no-repeat;
+                min-height: 100vh;
+                min-height: -webkit-fill-available;
+                font-family: sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+                padding: 0 1rem;
+            }
+
+            p {
+                color: #a9a9a9;
+                line-height: 1.5;
+            }
+
+            .highlight {
+                color: #ec2d0b;
+                font-weight: bold;
+            }
+
+            /* Bild-Container */
+            .image-section {
+                margin-top: 3rem;
+                max-width: 100%;
+            }
+
+            .img-fluid {
+                max-width: 80vmin;
+                height: auto;
+            }
+
+            /* Überschrift */
+                .main-title {
+                margin-top: 1rem;
+                color: white;
+                font-size: 2rem;
+                line-height: 1.2;
+                padding: 0 10px; /* Verhindert, dass Text am Rand klebt */
+                word-wrap: break-word;
+            }
+
+            /* Beschreibungstext */
+            .description-container {
+                display: flex;
+                justify-content: center;
+                margin-top: 0.5rem; /* Ersatz für mt-2 */
+                width: 100%;
+            }
+
+            .description-text {
+                width: 75%; /* Entspricht w-75 */
+            }
+
+            /* Button-Bereich */
+            .action-container {
+                margin-top: 3rem; /* Ersatz für mt-5 */
+            }
+
+            .btn-start {
+                display: inline-block;
+                padding: 1rem 2rem;
+                font-size: 1rem;
+                color: #000;
+                background-color: #f8f9fa;
+                text-decoration: none;
+                border-radius: 2rem;
+                transition: background-color 0.2s, transform 0.1s;
+                border: none;
+                cursor: pointer;
+                box-shadow: 10px 10px 40px rgb(28, 28, 28);
+                font-weight: bold;
+            }
+
+            .btn-start:hover {
+                background-color: #e2e6ea;
+            }
+
+            .btn-start:active {
+                transform: scale(0.98);
+            }
+
+            /* Layout für die Buttons nebeneinander */
+            .button-group {
+                display: flex;
+                gap: 1rem;
+                justify-content: center;
+                align-items: center;
+            }
+
+            .btn-contact {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 3.5rem;
+                height: 3.5rem;
+                background-color: rgba(255, 255, 255, 0.1);
+                color: white;
+                border-radius: 50%;
+                text-decoration: none;
+                transition: all 0.2s;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                cursor: pointer;
+            }
+
+            .btn-contact:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+
+            /* Simpler Modal-Stil (Kontaktdaten) */
+            #contact-overlay {
+                display: none;
+                position: fixed;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8);
+                z-index: 1000;
+                justify-content: center;
+                align-items: center;
+            }
+
+            .contact-card {
+                background: #fff;
+                color: #000;
+                padding: 2rem;
+                border-radius: 1rem;
+                max-width: 300px;
+                text-align: left;
+            }
+
+            .contact-card h2 { margin-bottom: 1rem; color: #000000; }
+            .close-btn {
+                display: block; margin-top: 1.5rem; color: #666;
+                cursor: pointer; text-decoration: underline; font-size: 0.9rem;
+            }
+
+        </style>
+    </head>
+    <body>
+
+        <div class="image-section">
+            <img class="img-fluid" src="static/start.png" alt="Start Illustration">
+        </div>
+
+        <h1 class="main-title">
+            Finde dein<span class="highlight"> perfektes </span>Reiseziel!
+        </h1>
+
+        <div class="description-container">
+            <p class="description-text">
+                Auf der Suche nach deinem nächsten Traumurlaub, einer Stadt für dein Auslandssemester oder dem perfekten Wochenendtrip? Entdecke durch 20 Klicks die Stadt, die deinen Wünschen entspricht!
+            </p>
+        </div>
+
+        <div class="action-container">
+            <div class="button-group">
+                <a href="/onboarding" class="btn-start">Los geht's</a>
+
+                <button class="btn-contact" onclick="toggleContact()">
+                    <span class="material-icons">mail</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="contact-overlay" onclick="toggleContact()">
+            <div class="contact-card" onclick="event.stopPropagation()">
+                <h2>Kontakt</h2>
+                <p><strong>Name:</strong> Jonas Knorr</p>
+                <p><strong>E-Mail:</strong> knorr-jonas@gmx.de</p>
+                <span class="close-btn" onclick="toggleContact()">Schließen</span>
+            </div>
+        </div>
+
+        <script>
+            function toggleContact() {
+                const overlay = document.getElementById('contact-overlay');
+                const isVisible = overlay.style.display === 'flex';
+                overlay.style.display = isVisible ? 'none' : 'flex';
+            }
+        </script>
+
+    </body>
+</html>

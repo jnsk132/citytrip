@@ -1,0 +1,590 @@
+<html lang="de">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+        <title>Reiseziel Finder</title>
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                background: #292F36;
+                font-family: sans-serif;
+                height: 100vh;
+                height: -webkit-fill-available;
+                overflow: hidden;
+                touch-action: none;
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                color: white;
+            }
+
+            /* Header */
+            .header-container {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                padding: 1.5rem 2rem 0;
+                position: relative;
+            }
+
+            .return-button {
+                position: absolute;
+                left: 1.5rem;
+                color: white;
+                font-size: clamp(1.2rem, 5vmin, 2rem);
+                text-decoration: none;
+                transition: color 0.3s;
+                padding: 0.5rem;
+                margin: -0.5rem;
+            }
+
+            .return-button:hover { color: rgb(200, 200, 200); }
+
+            .top-text {
+                font-size: clamp(1rem, 4vmin, 1.5rem);
+                margin: 0;
+            }
+
+            /* Progress Bar */
+            .progress-container {
+                width: min(75%, 600px);
+                margin-top: 1.5rem;
+            }
+
+            .progress-bar-text {
+                text-align: right;
+                margin-bottom: 0.5rem;
+                font-size: clamp(0.9rem, 2.5vmin, 1.1rem);
+            }
+
+            .progress-wrapper {
+                background-color: #e9ecef;
+                border-radius: 1vh;
+                height: clamp(6px, 1.5vh, 12px);
+                width: 100%;
+                overflow: hidden;
+                box-shadow: 10px 10px 40px rgba(28, 28, 28, 0.562);
+            }
+
+            .progress-bar-fill {
+                height: 100%;
+                background-color: #ec4f0b;
+                border-radius: 1vh;
+                transition: width 0.4s ease;
+            }
+
+            /* Bild-Bereich */
+            .main-content {
+                margin-top: clamp(1.5rem, 4vh, 3rem);
+                position: relative;
+                display: flex;
+                justify-content: center;
+                flex: 1;
+            }
+
+            .img-wrapper {
+                position: relative;
+                width: fit-content;
+                border-radius: 2rem;
+                overflow: hidden;
+                user-select: none;
+                -webkit-user-select: none;
+                /* Karten-Animation */
+                transition: transform 0.25s ease, opacity 0.25s ease;
+                will-change: transform, opacity;
+            }
+
+            /* Live-Swipe-Feedback (während des Ziehens) */
+            .img-wrapper.dragging {
+                transition: none;
+            }
+
+            .cropped_img {
+                width: min(80vw, 800px);
+                height: 60vh;
+                object-fit: cover;
+                object-position: center;
+                display: block;
+                pointer-events: none;
+            }
+
+            /* Swipe-Icons (Herz / X) */
+            .swipe-hint {
+                position: absolute;
+                top: 50%;
+                transform: translateY(-50%);
+                font-size: clamp(2rem, 8vmin, 4rem);
+                opacity: 0;
+                transition: opacity 0.15s ease;
+                pointer-events: none;
+                z-index: 10;
+            }
+            .swipe-hint.like    { right: 1.5rem; color: #28a745; }
+            .swipe-hint.dislike { left:  1.5rem; color: #a72828; }
+
+            .gradient-overlay {
+                position: absolute;
+                bottom: 0; left: 0; right: 0;
+                height: 30%;
+                background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
+                border-radius: 0 0 2rem 2rem;
+                pointer-events: none;
+            }
+
+            .text-overlay {
+                position: absolute;
+                bottom: 5%;
+                left: 50%;
+                transform: translateX(-50%);
+                text-align: center;
+                width: 100%;
+                pointer-events: none;
+            }
+
+            .city_text {
+                font-size: clamp(1.5rem, 7vmin, 3.5rem);
+                margin: 0;
+                color: #f8f9fa;
+            }
+
+            .country_text {
+                font-size: clamp(1rem, 4vmin, 2rem);
+                margin: 0;
+                color: #f8f9fa;
+            }
+
+            /* Buttons */
+            .button-container {
+                display: flex;
+                justify-content: center;
+                gap: clamp(2rem, 8vw, 5rem);
+                margin-top: clamp(1.5rem, 3vh, 3rem);
+                padding-bottom: max(2rem, env(safe-area-inset-bottom, 1rem) + 1.5rem);
+            }
+
+            .button {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                color: white;
+                background: transparent;
+                border: none;
+                font-size: clamp(2rem, 9vmin, 4rem);
+                border-radius: 50%;
+                height: clamp(64px, 18vmin, 110px);
+                width: clamp(64px, 18vmin, 110px);
+                cursor: pointer;
+                box-shadow: 10px 10px 40px rgba(28, 28, 28, 0.556);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            .button:active {
+                transform: scale(0.92);
+                box-shadow: 4px 4px 20px rgba(28, 28, 28, 0.4);
+            }
+
+            @media (hover: hover) {
+                .button:hover { transform: translateY(-8px); }
+            }
+
+            .like-button    { border: 5px solid #28a745; background: rgba(40, 167, 69, 0.1); }
+            .dislike-button { border: 5px solid #a72828; background: rgba(167, 40, 40, 0.1); }
+
+            .fa-heart { color: #28a745; }
+            .fa-times  { color: #a72828; }
+
+            .swipe-tip {
+                position: absolute;
+                bottom: calc(clamp(64px, 18vmin, 110px) + max(2rem, 2.5rem) + 0.5rem);
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 20;
+                color: white;
+                font-size: clamp(0.95rem, 3vmin, 1.15rem);
+                text-align: center;
+                line-height: 1.6;
+                text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+                pointer-events: none;
+                white-space: nowrap;
+                transition: opacity 0.5s ease;
+            }
+
+            @keyframes swipeHint {
+                0%   { transform: translateX(0) rotate(0deg); }
+                20%  { transform: translateX(-18px) rotate(-2deg); }
+                50%  { transform: translateX(18px) rotate(2deg); }
+                80%  { transform: translateX(-10px) rotate(-1deg); }
+                100% { transform: translateX(0) rotate(0deg); }
+            }
+
+            .img-wrapper.hint-anim {
+                animation: swipeHint 0.7s ease-in-out;
+            }
+
+            /* Querformat auf Handys */
+            @media (orientation: landscape) and (max-height: 600px) {
+                body {
+                    height: auto;
+                    min-height: 100vh;
+                    overflow-y: auto;
+                    touch-action: auto;
+                }
+
+                .header-container {
+                    padding-top: 0.75rem;
+                }
+
+                .progress-container {
+                    margin-top: 0.5rem;
+                }
+
+                .main-content {
+                    margin-top: 0.75rem;
+                    flex: none;
+                }
+
+                .cropped_img {
+                    height: 44vh;
+                }
+
+                .button-container {
+                    margin-top: 0.75rem;
+                    padding-bottom: 1rem;
+                }
+
+                .swipe-tip {
+                    margin-top: 0.25rem;
+                }
+            }
+
+            #swipeColor {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                z-index: 6;
+                opacity: 0;
+            }
+
+            /* ── Ergebnis-Loader ────────────────────────────────────── */
+            #resultOverlay {
+                position: fixed;
+                inset: 0;
+                background: #292F36;
+                z-index: 200;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+                padding: 2rem;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.4s ease;
+            }
+
+            #resultOverlay.active {
+                opacity: 1;
+                pointer-events: all;
+            }
+
+            .loader-icon {
+                font-size: clamp(3rem, 12vmin, 5rem);
+                color: #ec4f0b;
+                margin-bottom: 2rem;
+                animation: spin 3s linear infinite;
+            }
+
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(360deg); }
+            }
+
+            .loader-headline {
+                font-size: clamp(1.2rem, 4vmin, 1.8rem);
+                color: white;
+                font-weight: bold;
+                margin-bottom: 0.5rem;
+            }
+
+            .loader-status {
+                font-size: clamp(0.85rem, 2.5vmin, 1rem);
+                color: rgba(255,255,255,0.5);
+                margin-bottom: 2.5rem;
+                min-height: 1.4em;
+                transition: opacity 0.45s ease-in-out;
+            }
+
+            .loader-bar-track {
+                width: min(80vw, 340px);
+                height: 6px;
+                background: rgba(255,255,255,0.1);
+                border-radius: 99px;
+                overflow: hidden;
+            }
+
+            .loader-bar-fill {
+                height: 100%;
+                width: 0%;
+                background: #ec4f0b;
+                border-radius: 99px;
+                transition: width 0.6s ease;
+            }
+
+        </style>
+    </head>
+    <body>
+        <!-- Lade-Overlay -->
+        <div id="resultOverlay">
+            <i class="fa fa-globe loader-icon"></i>
+            <p class="loader-headline">Berechne dein perfektes Reiseziel</p>
+            <p class="loader-status" id="loaderStatus">Starte Analyse...</p>
+            <div class="loader-bar-track">
+                <div class="loader-bar-fill" id="loaderBar"></div>
+            </div>
+        </div>
+
+        <header class="header-container">
+            <a href="/" class="return-button">
+                <i class="fa fa-arrow-left"></i>
+            </a>
+            <h1 class="top-text">Finde dein Reiseziel</h1>
+        </header>
+
+        <div class="progress-container">
+            <p class="progress-bar-text" id="progressText">{{ iteration }} / 20</p>
+            <div class="progress-wrapper">
+                <div class="progress-bar-fill" id="progressFill"
+                     style="width: calc(({{ iteration }} / 20) * 100%);"></div>
+            </div>
+        </div>
+
+        <main class="main-content">
+            <div class="img-wrapper" id="imgWrapper">
+                <img class="cropped_img" id="cityImg" src="{{ file_path }}" alt="Stadtbild" draggable="false">
+
+                <div id="swipeColor"></div>
+
+                <span class="swipe-hint like"    id="hintLike"><i class="fa fa-heart"></i></span>
+                <span class="swipe-hint dislike" id="hintDislike"><i class="fa fa-times"></i></span>
+
+                <div class="gradient-overlay"></div>
+
+                <div class="text-overlay">
+                    <h1 class="city_text"    id="cityName">{{ city_name }}</h1>
+                    <p  class="country_text" id="countryName">{{ country_name }}</p>
+                </div>
+            </div>
+        </main>
+
+        <p class="swipe-tip" id="swipeTip">← Swipen oder Buttons nutzen →</p>
+
+        <footer class="button-container">
+            <button class="button dislike-button" id="dislikeBtn" onclick="submitChoice('dislike')">
+                <i class="fa fa-times"></i>
+            </button>
+            <button class="button like-button" id="likeBtn" onclick="submitChoice('like')">
+                <i class="fa fa-heart"></i>
+            </button>
+        </footer>
+
+<script>
+            const swipeColor  = document.getElementById('swipeColor');
+            const wrapper     = document.getElementById('imgWrapper');
+            const cityImg     = document.getElementById('cityImg');
+            const cityName    = document.getElementById('cityName');
+            const countryName = document.getElementById('countryName');
+            const progressTxt = document.getElementById('progressText');
+            const progressFill= document.getElementById('progressFill');
+            const hintLike    = document.getElementById('hintLike');
+            const hintDislike = document.getElementById('hintDislike');
+            const tip         = document.getElementById('swipeTip');
+
+            tip.style.display = 'none';
+
+            // Debug-Modus: ?debug in der URL startet die Animation sofort
+            if (new URLSearchParams(location.search).has('debug')) {
+                showResultLoader('/results');
+            }
+
+            let busy = false; // Verhindert Doppel-Clicks während Animation
+
+            // ── Karten-Transition ──────────────────────────────────────────
+            async function submitChoice(choice) {
+                if (busy) return;
+                busy = true;
+
+                localStorage.setItem('swipeTipSeen', '1');
+                tip.style.display = 'none';
+
+                const dir = choice === 'like' ? 1 : -1;
+
+
+// 1. Karte rausfliegen lassen
+                wrapper.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+                wrapper.style.transform  = `translateX(${dir * 120}px) rotate(${dir * 8}deg)`;
+                wrapper.style.opacity    = '0';
+
+                // 2. Parallel: Fetch nächste Stadt
+                let data;
+                try {
+                    const res = await fetch('/quiz/next', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ choice }),
+                    });
+                    data = await res.json();
+                } catch {
+                    // Fallback bei Netzwerkfehler
+                    window.location.href = `/quiz?choice=${choice}`;
+                    return;
+                }
+
+                if (data.redirect) {
+                    showResultLoader(data.redirect);
+                    return;
+                }
+
+                // 3. Bild voraus-laden
+                await new Promise(resolve => {
+                    const img = new Image();
+                    img.onload = img.onerror = resolve;
+                    img.src = data.file_path;
+                });
+
+                // 4. DOM aktualisieren – unsichtbar von der Gegenseite einblenden
+                cityImg.src         = data.file_path;
+                cityName.textContent    = data.city_name;
+                countryName.textContent = data.country_name;
+                progressTxt.textContent = `${data.iteration} / 20`;
+                progressFill.style.width= `${(data.iteration / 20) * 100}%`;
+
+                wrapper.style.transition = 'none';
+                wrapper.style.transform  = 'translateY(40px) scale(0.9)';
+                wrapper.style.opacity    = '0';
+
+                // Reflow erzwingen, dann von unten hochskalieren
+                wrapper.offsetHeight;
+
+                wrapper.style.transition = 'transform 0.22s ease-out, opacity 0.22s ease-out';
+                wrapper.style.transform  = 'translateY(0) scale(1)';
+                wrapper.style.opacity    = '1';
+
+                // Nach Animation wieder freigeben
+                setTimeout(() => { busy = false; }, 240);
+            }
+
+            // ── Touch-Swipe ────────────────────────────────────────────────
+            let startX = 0, startY = 0, currentX = 0, dragging = false, axis = null;
+            const THRESHOLD = 60;
+            const AXIS_LOCK = 10; // px bis Richtung festgelegt wird
+
+            wrapper.addEventListener('touchstart', e => {
+                if (busy) return;
+                startX = currentX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                dragging = true;
+                axis = null;
+            }, { passive: true });
+
+            wrapper.addEventListener('touchmove', e => {
+                if (!dragging) return;
+                currentX = e.touches[0].clientX;
+                const dx = currentX - startX;
+                const dy = e.touches[0].clientY - startY;
+
+                // Achse beim ersten klaren Ausschlag festlegen
+                if (!axis && (Math.abs(dx) > AXIS_LOCK || Math.abs(dy) > AXIS_LOCK)) {
+                    axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+                }
+
+                if (axis === 'x') {
+                    e.preventDefault(); // Scrollen unterdrücken
+                    wrapper.style.transition = 'none';
+                    wrapper.style.transform  = `translateX(${dx * 0.4}px) rotate(${dx * 0.03}deg)`;
+                    hintLike.style.opacity    = dx > 20  ? Math.min((dx  - 20) / 60, 1) : 0;
+                    hintDislike.style.opacity = dx < -20 ? Math.min((-dx - 20) / 60, 1) : 0;
+
+                    // Farbverlauf auf der Karte
+                    const intensity = Math.min(Math.abs(dx) / 160, 0.75);
+                    if (dx > 0) {
+                        swipeColor.style.background = 'linear-gradient(to left, rgba(40,167,69,0.8), transparent)';
+                    } else {
+                        swipeColor.style.background = 'linear-gradient(to right, rgba(167,40,40,0.8), transparent)';
+                    }
+                    swipeColor.style.opacity = Math.abs(dx) > 10 ? intensity : 0;
+                }
+                // axis === 'y' → normales Scrollen, keine Karteninteraktion
+            }, { passive: false }); // muss non-passive sein für preventDefault
+
+            wrapper.addEventListener('touchend', () => {
+                if (!dragging) return;
+                dragging = false;
+                hintLike.style.opacity = hintDislike.style.opacity = 0;
+                swipeColor.style.opacity = 0;
+
+                if (axis === 'x') {
+                    const delta = currentX - startX;
+                    if (Math.abs(delta) >= THRESHOLD) {
+                        submitChoice(delta > 0 ? 'like' : 'dislike');
+                    } else {
+                        wrapper.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+                        wrapper.style.transform  = 'translateX(0) rotate(0deg)';
+                    }
+                }
+                axis = null;
+            });
+
+            // ── Ergebnis-Loader ────────────────────────────────────────────
+            function showResultLoader(url) {
+                const overlay  = document.getElementById('resultOverlay');
+                const status   = document.getElementById('loaderStatus');
+                const bar      = document.getElementById('loaderBar');
+
+                const steps = [
+                    { text: 'Analysiere deine Präferenzen...',        progress: 25 },
+                    { text: 'Durchsuche 190 Städte weltweit...',       progress: 60 },
+                    { text: 'Letzte Optimierungen laufen...',           progress: 90 },
+                ];
+
+                overlay.classList.add('active');
+
+                let i = 0;
+                function nextStep() {
+                    if (i < steps.length) {
+                        // Fade out → Text wechseln → Fade in
+                        status.style.opacity = '0';
+                        setTimeout(() => {
+                            status.textContent = steps[i].text;
+                            bar.style.width    = steps[i].progress + '%';
+                            i++;
+                            status.style.opacity = '1';
+                            setTimeout(nextStep, 2600);
+                        }, 500); // warten bis 0.45s Fade-out sicher abgeschlossen
+                    } else {
+                        // Abschluss
+                        bar.style.width = '100%';
+                        status.style.opacity = '0';
+                        setTimeout(() => { window.location.href = url; }, 650);
+                    }
+                }
+
+                setTimeout(nextStep, 900);
+            }
+
+            // ── Tastatur ───────────────────────────────────────────────────
+            document.addEventListener('keydown', e => {
+                if (e.key === 'ArrowRight' || e.key === 'l') submitChoice('like');
+                if (e.key === 'ArrowLeft'  || e.key === 'h') submitChoice('dislike');
+            });
+        </script>
+    </body>
+</html>

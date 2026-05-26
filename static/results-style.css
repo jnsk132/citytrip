@@ -1,0 +1,271 @@
+
+/* Grund-Layout */
+html, body {
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+}
+
+body {
+    background: #292F36;
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    min-height: 100vh;
+}
+
+/* Hero Sektion */
+.hero-container {
+    position: relative;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 0 1.5rem;
+}
+
+.hero-text {
+    font-size: clamp(2rem, 8vmin, 5rem);
+    color: white;
+    margin: 0;
+    line-height: 1.2;
+}
+
+/* Scroll Pfeil */
+.scroll-arrow {
+    position: absolute;
+    bottom: 12vh;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: clamp(2rem, 8vmin, 4rem);
+    animation: bounce 2s infinite;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 1rem;
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {transform: translateX(-50%) translateY(0);}
+    40% {transform: translateX(-50%) translateY(-10px);}
+    60% {transform: translateX(-50%) translateY(-5px);}
+}
+
+/* Bild-Sektion */
+.image-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+    position: relative;
+}
+
+.image-container {
+    margin-top: 2rem;
+    position: relative;
+    width: fit-content;
+    border-radius: 2rem;
+    overflow: hidden;
+    box-shadow: 10px 10px 40px rgb(28, 28, 28);
+}
+
+.cropped_img {
+    width: min(80vw, 900px);
+    height: 60vh;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+/* Overlay & Text auf dem Bild */
+.gradient-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+    border-radius: 0 0 2rem 2rem;
+    pointer-events: none;
+}
+
+.image-content {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    width: 100%;
+    color: white;
+}
+
+.rank-badge {
+    position: absolute;
+    top: 1.5rem;
+    left: 1.5rem;
+    color: white;
+    font-size: clamp(2rem, 7vmin, 4rem);
+    font-weight: bold;
+    text-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+    margin: 0;
+    z-index: 10;
+}
+
+.city_text {
+    font-size: clamp(1.8rem, 7vmin, 4rem);
+    margin: 0;
+}
+
+.country_text {
+    font-size: clamp(1.1rem, 4vmin, 2.2rem);
+    margin: 0;
+    opacity: 0.9;
+}
+
+/* Beschreibungstext */
+.descriptive-container {
+    margin: 1.5rem auto;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 0 1rem;
+}
+
+.descriptive-text {
+    color: white;
+    font-size: clamp(1rem, 2.5vw, 1.25rem);
+    width: min(70vw, 700px);
+    line-height: 1.7;
+}
+
+/* Preferences Sektion */
+.preferences-section {
+    padding: 3rem 0 5rem;
+    background: linear-gradient(180deg, #292F36 40%, #ec4f0b 100%);
+    margin-top: 3rem;
+}
+
+.preferences-section .descriptive-container {
+    display: block;
+    padding: 0;
+    margin-bottom: 1rem;
+}
+
+.title {
+    color: white;
+    text-align: center;
+    font-size: clamp(1.5rem, 6vmin, 3rem);
+    padding: 0 1.5rem;
+}
+
+/* Preferences Slider */
+.preferences-grid {
+    display: flex;
+    flex-direction: row;
+    overflow-x: scroll;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 1rem;
+    padding: 1.5rem 1.5rem 1.5rem 1.5rem;
+    scroll-padding-left: 1.5rem;
+    scrollbar-width: none;
+}
+
+.preferences-grid::-webkit-scrollbar {
+    display: none;
+}
+
+.pref-card {
+    /* Karte nimmt ~75% der Breite ein, Rest zeigt die nächste Karte */
+    flex: 0 0 65vw;
+    scroll-snap-align: start;
+    background: #363c45;
+    padding: 1.5rem;
+    border-radius: 1.25rem;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    height: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.pref-card.high-importance {
+    border-color: rgba(236, 79, 11, 0.5);
+    box-shadow: 0 0 20px rgba(236, 79, 11, 0.15);
+}
+
+.pref-card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    line-height: 1.2;
+}
+
+.pref-card p {
+    font-size: clamp(0.9rem, 2vw, 1.05rem);
+    color: #ccc;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+}
+
+/* Custom Progress Bar */
+.progress-wrapper {
+    margin-top: auto;
+    padding-top: 1rem;
+}
+
+.progress-label {
+    font-size: clamp(0.75rem, 1.5vw, 0.9rem);
+    margin-bottom: 0.5rem;
+    color: #888;
+}
+
+.custom-progress {
+    height: 10px;
+    background: #252a30;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background-color: #ec4f0b;
+    border-radius: 1vh;
+}
+
+/* Restart Button */
+.button-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2.5rem 1rem 4rem;
+    width: 100%;
+}
+
+.restart-btn {
+    display: inline-block;
+    text-decoration: none;
+    background: white;
+    color: #292F36;
+    padding: 1rem 2.5rem;
+    border-radius: 4rem;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    font-size: clamp(1rem, 3vw, 1.25rem);
+}
+
+.restart-btn:hover {
+    background: #ec4f0b;
+    color: white;
+    transform: scale(1.05);
+}
+
+@media (hover: none) {
+    .restart-btn:hover {
+        transform: none;
+    }
+    .restart-btn:active {
+        background: #ec4f0b;
+        color: white;
+        transform: scale(0.97);
+    }
+}
