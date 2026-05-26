@@ -224,6 +224,39 @@ def get_all_sessions_overview():
     return overview
 
 
+def get_global_stats():
+    con = get_connection()
+    cur = con.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM sessions WHERE completed = 1")
+    total = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT sw.continent, COUNT(*)
+        FROM swipes sw
+        JOIN sessions s ON sw.session_id = s.id
+        WHERE sw.choice = 'like' AND s.completed = 1
+        GROUP BY sw.continent
+    """)
+    continent_likes = {row[0]: row[1] for row in cur.fetchall()}
+
+    cur.execute("""
+        SELECT r.city, COUNT(*)
+        FROM results r
+        JOIN sessions s ON r.session_id = s.id
+        WHERE r.rank = 1 AND s.completed = 1
+        GROUP BY r.city
+    """)
+    top_city_counts = {row[0]: row[1] for row in cur.fetchall()}
+
+    con.close()
+    return {
+        "total_sessions": total,
+        "continent_likes": continent_likes,
+        "top_city_counts": top_city_counts,
+    }
+
+
 def complete_session(session_id):
     con = get_connection()
     cur = con.cursor()

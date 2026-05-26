@@ -1,7 +1,8 @@
 from flask import Flask, render_template, redirect, request, session, jsonify
 from flask_session import Session
 from functions import *
-from database import init_db, create_session, save_swipe, save_result, complete_session, get_results, save_onboarding_answers, print_session_overview, get_all_sessions_overview
+from database import init_db, create_session, save_swipe, save_result, complete_session, get_results, save_onboarding_answers, print_session_overview, get_all_sessions_overview, get_global_stats
+from collections import Counter
 import csv
 import qrcode
 import base64
@@ -159,7 +160,49 @@ def results():
     img.save(buffered, format="JPEG")
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-    return render_template("results.html", cities=cities, sd=sd, img_b64=img_str)
+    personality = get_personality_type(user)
+
+    global_stats = get_global_stats()
+    rarity = None
+    if global_stats["total_sessions"] > 1:
+        rarity_items = []
+
+        liked_continents = user["liked_continents"]
+        if liked_continents:
+            dominant_continent = Counter(liked_continents).most_common(1)[0][0]
+            total_continent_likes = sum(global_stats["continent_likes"].values())
+            continent_count = global_stats["continent_likes"].get(dominant_continent, 0)
+            continent_pct = round((continent_count / total_continent_likes) * 100) if total_continent_likes > 0 else 0
+            rarity_items.append({
+                "label": f"Städte in {dominant_continent}",
+                "pct": continent_pct,
+                "text": f"{continent_pct}% aller Likes gehen an {dominant_continent}-Städte",
+            })
+
+        if cities:
+            top_city = cities[0][0]
+            city_count = global_stats["top_city_counts"].get(top_city, 0)
+            city_pct = round((city_count / global_stats["total_sessions"]) * 100)
+            rarity_items.append({
+                "label": f"{top_city} als Favorit",
+                "pct": city_pct,
+                "text": f"{city_pct}% der Spieler bekamen {top_city} als Top-Empfehlung",
+            })
+
+        if rarity_items:
+            avg_pct = sum(r["pct"] for r in rarity_items) / len(rarity_items)
+            uniqueness = round(max(1, min(99, 100 - avg_pct)))
+        else:
+            uniqueness = 50
+
+        rarity = {
+            "comparisons": rarity_items,
+            "uniqueness": uniqueness,
+            "total_sessions": global_stats["total_sessions"],
+        }
+
+    return render_template("results.html", cities=cities, sd=sd, img_b64=img_str,
+                           personality=personality, rarity=rarity)
 
 
 @app.route("/quiz/next", methods=["POST"])

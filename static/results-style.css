@@ -269,3 +269,162 @@ body {
         transform: scale(0.97);
     }
 }
+
+/* Persönlichkeitstyp */
+.personality-card {
+    margin: 0 1.5rem 1rem;
+    background: linear-gradient(135deg, #363c45, #2a3040);
+    border-radius: 1.5rem;
+    padding: 1.75rem;
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    border: 1px solid rgba(236, 79, 11, 0.35);
+    box-shadow: 0 0 30px rgba(236, 79, 11, 0.1);
+}
+
+.personality-emoji {
+    font-size: clamp(3rem, 10vmin, 4.5rem);
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.personality-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.personality-tagline {
+    color: #ec4f0b;
+    font-size: clamp(0.7rem, 1.8vmin, 0.85rem);
+    margin: 0 0 0.2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: bold;
+}
+
+.personality-name {
+    color: white;
+    font-size: clamp(1.2rem, 4vmin, 1.8rem);
+    margin: 0 0 0.6rem;
+    line-height: 1.2;
+}
+
+.personality-desc {
+    color: #aaa;
+    font-size: clamp(0.82rem, 2vmin, 0.95rem);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* Subsection Label */
+.subsection-label {
+    color: #888;
+    font-size: clamp(0.8rem, 2vmin, 0.95rem);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: bold;
+    margin: 1.5rem 0 0.25rem 1.5rem;
+}
+
+/* Seltenheits-Sektion */
+.rarity-section {
+    margin: 0.5rem 1.5rem 1rem;
+    background: #363c45;
+    border-radius: 1.5rem;
+    padding: 1.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rarity-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+}
+
+.rarity-title {
+    color: white;
+    font-size: clamp(1rem, 3.5vmin, 1.35rem);
+    margin: 0 0 0.2rem;
+    line-height: 1.2;
+}
+
+.rarity-subtitle {
+    color: #666;
+    font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
+    margin: 0;
+}
+
+.uniqueness-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(236, 79, 11, 0.12);
+    border: 1px solid rgba(236, 79, 11, 0.4);
+    border-radius: 1rem;
+    padding: 0.65rem 1.1rem;
+    flex-shrink: 0;
+}
+
+.uniqueness-number {
+    color: #ec4f0b;
+    font-size: clamp(1.5rem, 5vmin, 2rem);
+    font-weight: bold;
+    line-height: 1;
+}
+
+.uniqueness-label {
+    color: #ec4f0b;
+    font-size: clamp(0.6rem, 1.4vmin, 0.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 0.2rem;
+}
+
+.rarity-item {
+    margin-bottom: 1.1rem;
+}
+
+.rarity-item:last-child {
+    margin-bottom: 0;
+}
+
+.rarity-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+}
+
+.rarity-item-label {
+    color: #ddd;
+    font-size: clamp(0.85rem, 2.2vmin, 1rem);
+    font-weight: bold;
+}
+
+.rarity-item-pct {
+    color: #888;
+    font-size: clamp(0.8rem, 2vmin, 0.9rem);
+}
+
+.rarity-track {
+    height: 8px;
+    background: #252a30;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 0.35rem;
+}
+
+.rarity-fill {
+    height: 100%;
+    background: linear-gradient(to right, #ec4f0b, #ff7340);
+    border-radius: 10px;
+}
+
+.rarity-item-text {
+    color: #666;
+    font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
+    margin: 0;
+}

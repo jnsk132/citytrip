@@ -1,6 +1,70 @@
 import csv
 import random
 
+PERSONALITY_TYPES = {
+    "metropolen_fan": {
+        "name": "Der Metropolen-Fan",
+        "emoji": "🏙️",
+        "tagline": "Du liebst das pulsierende Großstadtleben",
+        "desc": "Skylines, Nachtleben und das Summen einer Millionenstadt – du fühlst dich in riesigen Städten am lebendigsten. Je größer, desto besser.",
+    },
+    "strandliebhaber": {
+        "name": "Der Strandliebhaber",
+        "emoji": "🏖️",
+        "tagline": "Sand, Sonne und Meer – mehr brauchst du nicht",
+        "desc": "Dein perfekter Urlaub beginnt und endet am Wasser. Warme Temperaturen und das Rauschen der Wellen sind für dich absolute Pflicht.",
+    },
+    "kulturreisender": {
+        "name": "Der Kulturreisende",
+        "emoji": "🏛️",
+        "tagline": "Du reist für Geschichte, Kunst und Atmosphäre",
+        "desc": "Museen, alte Gassen, lokale Küche – du willst nicht nur irgendwo sein, sondern wirklich etwas erleben und verstehen.",
+    },
+    "backpacker": {
+        "name": "Der Backpacker",
+        "emoji": "🎒",
+        "tagline": "Weit reisen, wenig ausgeben",
+        "desc": "Budget? Klein. Entdeckergeist? Riesig. Du weißt, dass die besten Reiseerlebnisse nicht die teuersten sein müssen.",
+    },
+    "luxusurlauber": {
+        "name": "Der Luxusurlauber",
+        "emoji": "✈️",
+        "tagline": "Reisen auf höchstem Niveau",
+        "desc": "Für dich ist Urlaub keine Frage des Preises, sondern der Qualität. Du wählst Städte, die das Beste bieten – und gibst es gern aus.",
+    },
+    "entdecker": {
+        "name": "Der Entdecker",
+        "emoji": "🧭",
+        "tagline": "Abseits der ausgetretenen Pfade",
+        "desc": "Touristenfallen? Nichts für dich. Du suchst das Unbekannte, die kleine Stadt, den unerwarteten Ort – und findest dort das Besondere.",
+    },
+}
+
+
+def get_personality_type(user):
+    def norm(lst):
+        total = sum(lst)
+        if total == 0:
+            return [1 / len(lst)] * len(lst)
+        return [x / total for x in lst]
+
+    lp = norm(user["count_liked_population"])       # [<100k, 100k-500k, 500k-1.7M, >1.7M]
+    lc = norm(user["count_liked_cost"])             # [<20, 20-40, 40-60, >60]
+    lo = norm(user["count_liked_ocean_distance"])   # [<5km, 5-50km, >50km]
+    ll = norm(user["count_liked_abs_latitude"])     # [<30°, 30-60°, >60°]
+
+    scores = {
+        "metropolen_fan":   lp[3] * 3 + lp[2] * 1,
+        "strandliebhaber":  lo[0] * 3 + ll[0] * 2,
+        "kulturreisender":  ll[1] * 2 + lp[1] * 1 + lp[2] * 1 + lc[1] * 1 + lc[2] * 1,
+        "backpacker":       lc[0] * 3 + lc[1] * 2,
+        "luxusurlauber":    lc[3] * 3 + lp[3] * 1 + lp[2] * 1,
+        "entdecker":        ll[2] * 2 + lp[0] * 2 + lo[2] * 1,
+    }
+
+    best_key = max(scores, key=scores.get)
+    return PERSONALITY_TYPES[best_key]
+
 # Fügt das Ergebnis der Bewertung einer Stadt dem user dict hinzu
 def scoring(city, user, result):
     cost_index_categories = [20, 40, 60] # 4 Kategorien: < 20, < 40, < 60, >= 60
