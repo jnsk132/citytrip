@@ -1,8 +1,7 @@
 from flask import Flask, render_template, redirect, request, session, jsonify
 from flask_session import Session
 from functions import *
-from database import init_db, create_session, save_swipe, save_result, complete_session, get_results, save_onboarding_answers, print_session_overview, get_all_sessions_overview, get_global_stats
-from collections import Counter
+from database import init_db, create_session, save_swipe, save_result, complete_session, get_results, save_onboarding_answers, print_session_overview, get_all_sessions_overview, get_global_stats, get_all_liked_cities, get_swipes_for_session, get_session_id_by_code
 import csv
 import qrcode
 import base64
@@ -29,7 +28,9 @@ def index():
 
     session["iteration"] = 0
     session["current_city_data"] = None
-    session["session_id"] = create_session()
+    session_id, short_code = create_session()
+    session["session_id"] = session_id
+    session["short_code"] = short_code
 
     session["user"] = {
         # Likes
@@ -82,13 +83,15 @@ def quiz_init():
     session["iteration"] = 1
     city_row = get_next_city(user, city_list)
     session["current_city_data"] = city_row
-    prefetch_row = get_next_city(user, city_list, extra_seen={city_row[0]})
+    # Stadt N+1 vorausberechnen und in Session festschreiben
+    next_row = get_next_city(user, city_list, extra_seen={city_row[0]})
+    session["next_city_data"] = next_row
     return jsonify({
         "city_name": city_row[0],
         "country_name": city_row[1],
         "file_path": f"static/Alle_Stadt_Bilder/{city_row[11]}.jpg",
         "iteration": 1,
-        "prefetch_path": f"static/Alle_Stadt_Bilder/{prefetch_row[11]}.jpg",
+        "prefetch_path": f"static/Alle_Stadt_Bilder/{next_row[11]}.jpg",
     })
 
 
@@ -154,7 +157,8 @@ def results():
     complete_session(session_id)
     print_session_overview(session_id)
 
-    img = qrcode.make(session_id)
+    result_url = f"{request.host_url}results/{session_id}"
+    img = qrcode.make(result_url)
 
     buffered = BytesIO()
     img.save(buffered, format="JPEG")
@@ -165,44 +169,13 @@ def results():
     global_stats = get_global_stats()
     rarity = None
     if global_stats["total_sessions"] > 1:
-        rarity_items = []
-
-        liked_continents = user["liked_continents"]
-        if liked_continents:
-            dominant_continent = Counter(liked_continents).most_common(1)[0][0]
-            total_continent_likes = sum(global_stats["continent_likes"].values())
-            continent_count = global_stats["continent_likes"].get(dominant_continent, 0)
-            continent_pct = round((continent_count / total_continent_likes) * 100) if total_continent_likes > 0 else 0
-            rarity_items.append({
-                "label": f"Städte in {dominant_continent}",
-                "pct": continent_pct,
-                "text": f"{continent_pct}% aller Likes gehen an {dominant_continent}-Städte",
-            })
-
-        if cities:
-            top_city = cities[0][0]
-            city_count = global_stats["top_city_counts"].get(top_city, 0)
-            city_pct = round((city_count / global_stats["total_sessions"]) * 100)
-            rarity_items.append({
-                "label": f"{top_city} als Favorit",
-                "pct": city_pct,
-                "text": f"{city_pct}% der Spieler bekamen {top_city} als Top-Empfehlung",
-            })
-
-        if rarity_items:
-            avg_pct = sum(r["pct"] for r in rarity_items) / len(rarity_items)
-            uniqueness = round(max(1, min(99, 100 - avg_pct)))
-        else:
-            uniqueness = 50
-
-        rarity = {
-            "comparisons": rarity_items,
-            "uniqueness": uniqueness,
-            "total_sessions": global_stats["total_sessions"],
-        }
+        liked_cities_global = get_all_liked_cities()
+        rarity = calculate_rarity(user, city_list, liked_cities_global)
+        rarity["total_sessions"] = global_stats["total_sessions"]
 
     return render_template("results.html", cities=cities, sd=sd, img_b64=img_str,
-                           personality=personality, rarity=rarity)
+                           personality=personality, rarity=rarity,
+                           session_id=session_id, short_code=session.get("short_code"))
 
 
 @app.route("/quiz/next", methods=["POST"])
@@ -233,16 +206,20 @@ def quiz_next():
     if session["iteration"] > 20:
         return jsonify({"redirect": "/results"})
 
-    city_row = get_next_city(user, city_list)
+    # Festgeschriebene Stadt N+1 aus Session holen (garantiert korrektes Prefetch)
+    city_row = session.get("next_city_data") or get_next_city(user, city_list)
     session["current_city_data"] = city_row
-    prefetch_row = get_next_city(user, city_list, extra_seen={city_row[0]})
+
+    # Stadt N+2 vorausberechnen und festschreiben (basiert auf Ratings 1..N)
+    new_next = get_next_city(user, city_list, extra_seen={city_row[0]})
+    session["next_city_data"] = new_next
 
     return jsonify({
         "city_name": city_row[0],
         "country_name": city_row[1],
         "file_path": f"static/Alle_Stadt_Bilder/{city_row[11]}.jpg",
         "iteration": session["iteration"],
-        "prefetch_path": f"static/Alle_Stadt_Bilder/{prefetch_row[11]}.jpg",
+        "prefetch_path": f"static/Alle_Stadt_Bilder/{new_next[11]}.jpg",
     })
 
 
@@ -251,9 +228,88 @@ def results_by_id(session_id):
     rows = get_results(session_id)
     if not rows:
         return redirect("/")
-    # rows: [(rank, city, country, score), ...]
-    cities = [[row[1], row[2]] for row in rows]
-    return render_template("results.html", cities=cities, sd=[], img_b64=None)
+
+    # Volle Stadtdaten aus CSV holen (Bild, Beschreibung etc.)
+    city_map = {city[0]: city for city in city_list}
+    used_descriptions = set()
+    cities = []
+    for _, city_name, country, score in rows:
+        city_data = city_map.get(city_name)
+        if city_data:
+            city_data = list(city_data)
+            city_data.append(get_city_description(city_data, used_descriptions))
+        else:
+            city_data = [city_name, country] + [''] * 16 + ['']
+        cities.append(city_data)
+
+    # User-Profil aus gespeicherten Swipes rekonstruieren
+    swipes = get_swipes_for_session(session_id)
+    user = {
+        "liked_rankings": [], "liked_cities": [], "liked_countries": [], "liked_continents": [],
+        "count_liked_cost": [0,0,0,0], "count_liked_population": [0,0,0,0],
+        "count_liked_ocean_distance": [0,0,0], "count_liked_abs_latitude": [0,0,0],
+        "disliked_rankings": [], "disliked_cities": [], "disliked_countries": [], "disliked_continents": [],
+        "count_disliked_cost": [0,0,0,0], "count_disliked_population": [0,0,0,0],
+        "count_disliked_ocean_distance": [0,0,0], "count_disliked_abs_latitude": [0,0,0],
+    }
+    for _, city_name, _, _, choice in swipes:
+        city_data = city_map.get(city_name)
+        if city_data:
+            scoring(city_data, user, choice == "like")
+
+    personality = get_personality_type(user)
+
+    global_stats = get_global_stats()
+    rarity = None
+    if global_stats["total_sessions"] > 1:
+        liked_cities_global = get_all_liked_cities()
+        rarity = calculate_rarity(user, city_list, liked_cities_global)
+        rarity["total_sessions"] = global_stats["total_sessions"]
+
+    return render_template("results.html", cities=cities, sd=[], img_b64=None,
+                           personality=personality, rarity=rarity)
+
+
+@app.route("/compare/join", methods=["POST"])
+def compare_join():
+    if "session_id" not in session:
+        return redirect("/")
+    friend_code = request.form.get("friend_code", "").strip().upper()
+    friend_id = get_session_id_by_code(friend_code)
+    if not friend_id:
+        return redirect(f"/results?code_error=1")
+    return redirect(f"/compare/{session['session_id']}/{friend_id}")
+
+
+@app.route("/compare/<id1>/<id2>")
+def compare(id1, id2):
+    def load_session(sid):
+        rows = get_results(sid)
+        if not rows:
+            return None
+        city_map = {city[0]: city for city in city_list}
+        used_descriptions = set()
+        cities = []
+        for _, city_name, country, score in rows:
+            city_data = city_map.get(city_name)
+            if city_data:
+                city_data = list(city_data)
+                city_data.append(get_city_description(city_data, used_descriptions))
+            else:
+                city_data = [city_name, country] + [''] * 16 + ['']
+            cities.append(city_data)
+        return cities
+
+    cities1 = load_session(id1)
+    cities2 = load_session(id2)
+    if not cities1 or not cities2:
+        return redirect("/")
+
+    names1 = {c[0] for c in cities1}
+    names2 = {c[0] for c in cities2}
+    common = names1 & names2
+
+    return render_template("compare.html", cities1=cities1, cities2=cities2, common=common)
 
 
 @app.route("/admin")

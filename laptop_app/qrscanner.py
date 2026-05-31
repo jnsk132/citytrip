@@ -124,8 +124,15 @@ def show_ranking(ranked_cities):
                  font=result_font, fg="#888888", bg="#1a1a2e").pack(side="left")
 
 
-def on_qr_detected(session_id):
+def on_qr_detected(data):
     global last_session_id
+
+    # URL-Format: http://host/results/<uuid> → UUID extrahieren
+    if data.startswith("http"):
+        session_id = data.rstrip("/").split("/")[-1]
+    else:
+        session_id = data
+
     if session_id == last_session_id:
         return
     last_session_id = session_id

@@ -270,21 +270,56 @@ body {
     }
 }
 
+/* Rubbel-Karte */
+.scratch-hint-text {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: clamp(0.8rem, 2vmin, 0.95rem);
+    text-align: center;
+    margin: 0 1.5rem 1.25rem;
+}
+
+.scratch-wrapper {
+    position: relative;
+    margin: 0 1.5rem 1rem;
+}
+
+.scratch-wrapper .personality-card {
+    margin: 0 0 1rem 0;
+}
+
+
+.scratch-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    z-index: 10;
+    touch-action: none;
+    border-radius: 1.5rem;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
 /* Persönlichkeitstyp */
 .personality-card {
     margin: 0 1.5rem 1rem;
     background: linear-gradient(135deg, #363c45, #2a3040);
     border-radius: 1.5rem;
-    padding: 1.75rem;
+    padding: clamp(2rem, 6vw, 3rem);
     display: flex;
-    gap: 1.25rem;
+    flex-direction: column;
+    gap: 1.5rem;
     align-items: center;
+    text-align: center;
     border: 1px solid rgba(236, 79, 11, 0.35);
     box-shadow: 0 0 30px rgba(236, 79, 11, 0.1);
+    min-height: 40vh;
+    justify-content: center;
 }
 
 .personality-emoji {
-    font-size: clamp(3rem, 10vmin, 4.5rem);
+    font-size: clamp(5rem, 18vmin, 8rem);
     line-height: 1;
     flex-shrink: 0;
 }
@@ -296,8 +331,8 @@ body {
 
 .personality-tagline {
     color: #ec4f0b;
-    font-size: clamp(0.7rem, 1.8vmin, 0.85rem);
-    margin: 0 0 0.2rem;
+    font-size: clamp(0.8rem, 2.2vmin, 1rem);
+    margin: 0 0 0.5rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     font-weight: bold;
@@ -305,16 +340,18 @@ body {
 
 .personality-name {
     color: white;
-    font-size: clamp(1.2rem, 4vmin, 1.8rem);
-    margin: 0 0 0.6rem;
+    font-size: clamp(1.8rem, 6vmin, 2.8rem);
+    margin: 0 0 0.8rem;
     line-height: 1.2;
 }
 
 .personality-desc {
     color: #aaa;
-    font-size: clamp(0.82rem, 2vmin, 0.95rem);
+    font-size: clamp(0.95rem, 2.5vmin, 1.15rem);
     margin: 0;
-    line-height: 1.6;
+    line-height: 1.7;
+    max-width: 480px;
+    margin-inline: auto;
 }
 
 /* Subsection Label */
@@ -398,9 +435,22 @@ body {
     margin-bottom: 0.35rem;
 }
 
-.rarity-item-label {
+.rarity-item-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.rarity-category {
+    color: #777;
+    font-size: clamp(0.68rem, 1.6vmin, 0.8rem);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.rarity-user-pref {
     color: #ddd;
-    font-size: clamp(0.85rem, 2.2vmin, 1rem);
+    font-size: clamp(0.9rem, 2.4vmin, 1.05rem);
     font-weight: bold;
 }
 
@@ -427,4 +477,296 @@ body {
     color: #666;
     font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
     margin: 0;
+}
+
+/* ── Teilen-Karte ─────────────────────────────────────────────── */
+#shareOverlay {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.share-card {
+    background: #1a1f26;
+    border-radius: 1.5rem;
+    overflow: hidden;
+    width: min(320px, 82vw);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+    font-family: sans-serif;
+    flex-shrink: 0;
+}
+
+.sc-image-wrap {
+    position: relative;
+    width: 100%;
+    height: 190px;
+}
+
+.sc-city-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.sc-img-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.1) 55%);
+}
+
+.sc-badge {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    background: #ec4f0b;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 0.2rem 0.6rem;
+    border-radius: 2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.sc-city-info {
+    position: absolute;
+    bottom: 0.9rem;
+    left: 1.1rem;
+}
+
+.sc-city-name {
+    color: white;
+    font-size: 1.75rem;
+    margin: 0;
+    line-height: 1.1;
+    font-weight: bold;
+}
+
+.sc-country {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.85rem;
+    margin: 0.15rem 0 0;
+}
+
+/* Boarding-Pass Trenner */
+.sc-separator {
+    display: flex;
+    align-items: center;
+    position: relative;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.sc-notch {
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 0, 0, 0.88);
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    flex-shrink: 0;
+}
+.sc-notch.left  { left: -14px; }
+.sc-notch.right { right: -14px; }
+
+.sc-dash-line {
+    flex: 1;
+    border-top: 2px dashed rgba(255, 255, 255, 0.12);
+    margin: 0 14px;
+}
+
+/* Persönlichkeitstyp */
+.sc-personality-section {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.sc-personality-emoji {
+    font-size: 2.2rem;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.sc-personality-label {
+    color: #555;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin: 0 0 0.15rem;
+}
+
+.sc-personality-name {
+    color: white;
+    font-size: 0.95rem;
+    font-weight: bold;
+    margin: 0;
+    line-height: 1.2;
+}
+
+/* QR-Code Bereich */
+.sc-qr-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.25rem 1.25rem 0.75rem;
+    gap: 0.6rem;
+}
+
+.sc-qr {
+    width: 150px;
+    height: 150px;
+    border-radius: 0.6rem;
+    display: block;
+    background: white;
+    padding: 5px;
+}
+
+.sc-qr-hint {
+    color: rgba(255,255,255,0.3);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0;
+}
+
+.sc-branding {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    padding: 0.4rem 1rem 0.9rem;
+    text-transform: uppercase;
+}
+
+/* Action Buttons unter der Karte */
+.sc-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.sc-btn {
+    padding: 0.7rem 1.4rem;
+    border-radius: 3rem;
+    border: none;
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+    color: white;
+    background: rgba(255, 255, 255, 0.12);
+    transition: transform 0.15s ease, background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sc-btn.primary {
+    background: #ec4f0b;
+}
+
+.sc-btn:active {
+    transform: scale(0.94);
+}
+
+/* ── Freund-Vergleich Box ─────────────────────────────────────── */
+.compare-box {
+    margin: 0 1.5rem 0.5rem;
+    background: #363c45;
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.compare-label {
+    color: #777;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-weight: bold;
+    margin: 0 0 0.5rem;
+}
+
+.compare-code {
+    font-size: clamp(2.2rem, 10vmin, 3rem);
+    font-weight: bold;
+    color: white;
+    letter-spacing: 0.22em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.compare-hint {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.78rem;
+    margin: 0.4rem 0 0;
+}
+
+.compare-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.compare-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.compare-input-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0;
+}
+
+.compare-input {
+    flex: 1;
+    background: #252a30;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.85rem;
+    color: white;
+    font-size: clamp(1.4rem, 6vmin, 1.8rem);
+    font-weight: bold;
+    letter-spacing: 0.25em;
+    padding: 0.65rem 1rem;
+    text-align: center;
+    outline: none;
+    -webkit-appearance: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.compare-input::placeholder {
+    color: rgba(255, 255, 255, 0.15);
+    letter-spacing: 0.2em;
+}
+
+.compare-input:focus {
+    border-color: #ec4f0b;
+}
+
+.compare-btn {
+    background: #ec4f0b;
+    color: white;
+    border: none;
+    border-radius: 0.85rem;
+    padding: 0 1.25rem;
+    font-size: 1.1rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.15s;
+}
+
+.compare-btn:active {
+    transform: scale(0.93);
+}
+
+.compare-error {
+    color: #ff6b6b;
+    font-size: 0.8rem;
+    margin: 0.6rem 0 0;
 }

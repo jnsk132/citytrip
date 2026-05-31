@@ -1,6 +1,18 @@
 import sqlite3
 import uuid
 import datetime
+import random
+import string
+
+_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # kein O/I/0/1 (Verwechslungsgefahr)
+
+def _generate_short_code(cur):
+    for _ in range(50):
+        code = ''.join(random.choices(_CODE_CHARS, k=4))
+        cur.execute("SELECT 1 FROM sessions WHERE short_code = ?", (code,))
+        if not cur.fetchone():
+            return code
+    raise RuntimeError("Kein freier short_code gefunden")
 
 DB_PATH = "database.db"
 
@@ -15,9 +27,14 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sessions (
             id         TEXT PRIMARY KEY,
             created_at TIMESTAMP,
-            completed  INTEGER DEFAULT 0
+            completed  INTEGER DEFAULT 0,
+            short_code TEXT UNIQUE
         )
     """)
+    try:
+        cur.execute("ALTER TABLE sessions ADD COLUMN short_code TEXT")
+    except Exception:
+        pass
     cur.execute("""
         CREATE TABLE IF NOT EXISTS onboarding_answers (
             id          TEXT PRIMARY KEY,
@@ -134,14 +151,24 @@ def create_session():
 
     con = get_connection()
     cur = con.cursor()
+    short_code = _generate_short_code(cur)
     cur.execute(
-        "INSERT INTO sessions (id, created_at, completed) VALUES (?, ?, ?)",
-        (session_id, created_at, 0)
+        "INSERT INTO sessions (id, created_at, completed, short_code) VALUES (?, ?, ?, ?)",
+        (session_id, created_at, 0, short_code)
     )
     con.commit()
     con.close()
 
-    return session_id
+    return session_id, short_code
+
+
+def get_session_id_by_code(short_code):
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("SELECT id FROM sessions WHERE short_code = ?", (short_code.upper(),))
+    row = cur.fetchone()
+    con.close()
+    return row[0] if row else None
 
 
 def save_swipe(session_id, iteration, city, country, continent, choice):
@@ -222,6 +249,32 @@ def get_all_sessions_overview():
 
     con.close()
     return overview
+
+
+def get_swipes_for_session(session_id):
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute(
+        "SELECT iteration, city, country, continent, choice FROM swipes WHERE session_id = ? ORDER BY iteration",
+        (session_id,)
+    )
+    rows = cur.fetchall()
+    con.close()
+    return rows
+
+
+def get_all_liked_cities():
+    """Gibt alle gelikten Städtenamen aus abgeschlossenen Sessions zurück."""
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT sw.city FROM swipes sw
+        JOIN sessions s ON sw.session_id = s.id
+        WHERE sw.choice = 'like' AND s.completed = 1
+    """)
+    rows = cur.fetchall()
+    con.close()
+    return [row[0] for row in rows]
 
 
 def get_global_stats():

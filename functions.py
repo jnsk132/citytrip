@@ -42,28 +42,126 @@ PERSONALITY_TYPES = {
 
 
 def get_personality_type(user):
-    def norm(lst):
-        total = sum(lst)
+    # Netto-Präferenz: liked - disliked, negative Werte auf 0 kappen,
+    # dann auf Summe 1 normalisieren. So fließen Dislikes korrekt ein.
+    def net_norm(liked, disliked):
+        net = [max(0, liked[i] - disliked[i]) for i in range(len(liked))]
+        total = sum(net)
         if total == 0:
-            return [1 / len(lst)] * len(lst)
-        return [x / total for x in lst]
+            return [1 / len(liked)] * len(liked)
+        return [x / total for x in net]
 
-    lp = norm(user["count_liked_population"])       # [<100k, 100k-500k, 500k-1.7M, >1.7M]
-    lc = norm(user["count_liked_cost"])             # [<20, 20-40, 40-60, >60]
-    lo = norm(user["count_liked_ocean_distance"])   # [<5km, 5-50km, >50km]
-    ll = norm(user["count_liked_abs_latitude"])     # [<30°, 30-60°, >60°]
+    lp = net_norm(user["count_liked_population"],     user["count_disliked_population"])
+    lc = net_norm(user["count_liked_cost"],           user["count_disliked_cost"])
+    lo = net_norm(user["count_liked_ocean_distance"], user["count_disliked_ocean_distance"])
+    ll = net_norm(user["count_liked_abs_latitude"],   user["count_disliked_abs_latitude"])
+
+    # Strandliebhaber braucht eine klare Dominanz der Küstenpräferenz über
+    # Inlandpräferenz — nur tropisch zu mögen reicht nicht.
+    coast_over_inland  = max(0, lo[0] - lo[2])  # >0 nur wenn Küste > Inland
+    warm_over_cold     = max(0, ll[0] - ll[2])  # >0 nur wenn Tropisch > Kühl
 
     scores = {
-        "metropolen_fan":   lp[3] * 3 + lp[2] * 1,
-        "strandliebhaber":  lo[0] * 3 + ll[0] * 2,
-        "kulturreisender":  ll[1] * 2 + lp[1] * 1 + lp[2] * 1 + lc[1] * 1 + lc[2] * 1,
-        "backpacker":       lc[0] * 3 + lc[1] * 2,
-        "luxusurlauber":    lc[3] * 3 + lp[3] * 1 + lp[2] * 1,
-        "entdecker":        ll[2] * 2 + lp[0] * 2 + lo[2] * 1,
+        "metropolen_fan":  lp[3] * 5,
+        "strandliebhaber": coast_over_inland * (4 + warm_over_cold),
+        "kulturreisender": ll[1] * 2 + (lp[1] + lp[2]) * 1.5 + lc[1] * 1,
+        "backpacker":      lc[0] * 3 + lc[1] * 2,
+        "luxusurlauber":   lc[3] * 4 + lp[3] * 1,
+        "entdecker":       ll[2] * 2 + lp[0] * 2 + lo[2] * 1,
     }
 
     best_key = max(scores, key=scores.get)
     return PERSONALITY_TYPES[best_key]
+
+
+# Labels für die Bins jeder Kategorie
+_COST_LABELS  = ["Günstig", "Erschwinglich", "Gehoben", "Luxuriös"]
+_POP_LABELS   = ["Kleinstadt", "Mittelgroß", "Großstadt", "Megacity"]
+_OCEAN_LABELS = ["Direkt am Meer", "Küstennah", "Im Landesinneren"]
+_LAT_LABELS   = ["Tropisch", "Gemäßigt", "Kühl & Polar"]
+
+
+def _get_global_bin_distributions(liked_cities, city_list):
+    """Berechnet die globale Bin-Verteilung aller Likes aus der DB."""
+    cost_cats  = [20, 40, 60]
+    pop_cats   = [100000, 500000, 1700000]
+    ocean_cats = [5, 50]
+    lat_cats   = [30, 60]
+
+    city_map = {city[0]: city for city in city_list}
+
+    g_cost  = [0, 0, 0, 0]
+    g_pop   = [0, 0, 0, 0]
+    g_ocean = [0, 0, 0]
+    g_lat   = [0, 0, 0]
+
+    for city_name in liked_cities:
+        city = city_map.get(city_name)
+        if not city:
+            continue
+        if city[4] != '':
+            g_cost[categorise(cost_cats, city[4])] += 1
+        g_pop[categorise(pop_cats, city[6])] += 1
+        g_ocean[categorise(ocean_cats, city[7])] += 1
+        g_lat[categorise(lat_cats, city[8])] += 1
+
+    def to_pct(lst):
+        total = sum(lst)
+        if total == 0:
+            return [round(100 / len(lst))] * len(lst)
+        return [round(x / total * 100) for x in lst]
+
+    return {
+        "cost":       to_pct(g_cost),
+        "population": to_pct(g_pop),
+        "ocean":      to_pct(g_ocean),
+        "latitude":   to_pct(g_lat),
+    }
+
+
+def calculate_rarity(user, city_list, liked_cities_global):
+    """Vergleicht die Präferenzen des Users mit allen anderen Spielern."""
+
+    def dominant(lst):
+        return lst.index(max(lst)) if max(lst) > 0 else 0
+
+    dom_cost  = dominant(user["count_liked_cost"])
+    dom_pop   = dominant(user["count_liked_population"])
+    dom_ocean = dominant(user["count_liked_ocean_distance"])
+    dom_lat   = dominant(user["count_liked_abs_latitude"])
+
+    dist = _get_global_bin_distributions(liked_cities_global, city_list)
+
+    comparisons = [
+        {
+            "category": "Lebenskosten",
+            "user_pref": _COST_LABELS[dom_cost],
+            "pct": dist["cost"][dom_cost],
+        },
+        {
+            "category": "Stadtgröße",
+            "user_pref": _POP_LABELS[dom_pop],
+            "pct": dist["population"][dom_pop],
+        },
+        {
+            "category": "Meeresnähe",
+            "user_pref": _OCEAN_LABELS[dom_ocean],
+            "pct": dist["ocean"][dom_ocean],
+        },
+        {
+            "category": "Klimazone",
+            "user_pref": _LAT_LABELS[dom_lat],
+            "pct": dist["latitude"][dom_lat],
+        },
+    ]
+
+    avg_pct = sum(c["pct"] for c in comparisons) / len(comparisons)
+    uniqueness = round(max(1, min(99, 100 - avg_pct)))
+
+    return {
+        "comparisons": comparisons,
+        "uniqueness": uniqueness,
+    }
 
 # Fügt das Ergebnis der Bewertung einer Stadt dem user dict hinzu
 def scoring(city, user, result):

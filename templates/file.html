@@ -480,6 +480,12 @@
 
                 // Nach Animation wieder freigeben
                 setTimeout(() => { busy = false; }, 240);
+
+                // Nächstes Bild im Hintergrund vorausladen
+                if (data.prefetch_path) {
+                    const prefetch = new Image();
+                    prefetch.src = data.prefetch_path;
+                }
             }
 
             // ── Touch-Swipe ────────────────────────────────────────────────

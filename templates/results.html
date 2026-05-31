@@ -6,6 +6,7 @@
     <title>Dein Reiseziel</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="static/results-style.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
@@ -37,34 +38,21 @@
     <div class="preferences-section">
         <div class="descriptive-container">
             <h1 class="title">Deine Reise-DNA</h1>
+            <p class="scratch-hint-text">Rubble die Karte frei, um dein Ergebnis zu sehen</p>
         </div>
 
-        <!-- Persönlichkeitstyp -->
-        <div class="personality-card">
-            <div class="personality-emoji">{{ personality.emoji }}</div>
-            <div class="personality-body">
-                <p class="personality-tagline">Du bist...</p>
-                <h2 class="personality-name">{{ personality.name }}</h2>
-                <p class="personality-desc">{{ personality.desc }}</p>
-            </div>
-        </div>
-
-        <!-- Präferenzkarten -->
-        <p class="subsection-label">Was dir wichtig ist</p>
-        <div class="preferences-grid">
-            {% for item in sd %}
-            <div class="pref-card {{ 'high-importance' if item.is_high else '' }}">
-                <div class="pref-header"></div>
-                <h3>{{ item.title }}</h3>
-                <p>{{ item.desc }}</p>
-                <div class="progress-wrapper">
-                    <div class="progress-label">Relevanz für dich</div>
-                    <div class="custom-progress">
-                        <div class="progress-bar-fill" style="width: {{ item.value }}%;"></div>
-                    </div>
+        <div class="scratch-wrapper" id="scratchWrapper">
+            <!-- Persönlichkeitstyp -->
+            <div class="personality-card">
+                <div class="personality-emoji">{{ personality.emoji }}</div>
+                <div class="personality-body">
+                    <p class="personality-tagline">Du bist...</p>
+                    <h2 class="personality-name">{{ personality.name }}</h2>
+                    <p class="personality-desc">{{ personality.desc }}</p>
                 </div>
             </div>
-            {% endfor %}
+
+            <canvas id="scratchCanvas" class="scratch-canvas"></canvas>
         </div>
 
         <!-- Seltenheits-Vergleich -->
@@ -84,13 +72,16 @@
             {% for item in rarity.comparisons %}
             <div class="rarity-item">
                 <div class="rarity-item-header">
-                    <span class="rarity-item-label">{{ item.label }}</span>
+                    <div class="rarity-item-labels">
+                        <span class="rarity-category">{{ item.category }}</span>
+                        <span class="rarity-user-pref">{{ item.user_pref }}</span>
+                    </div>
                     <span class="rarity-item-pct">{{ item.pct }}%</span>
                 </div>
                 <div class="rarity-track">
                     <div class="rarity-fill" style="width: {{ item.pct }}%"></div>
                 </div>
-                <p class="rarity-item-text">{{ item.text }}</p>
+                <p class="rarity-item-text">{{ item.pct }}% aller Likes teilen diese Vorliebe</p>
             </div>
             {% endfor %}
         </div>
@@ -98,11 +89,36 @@
 
         {% if img_b64 %}
         <div class="button-wrapper">
-            <button class="restart-btn" onclick="document.getElementById('qr-overlay').style.display='flex'">QR-Code anzeigen</button>
+            <button class="restart-btn" onclick="openShareCard()">
+                <i class="fa fa-share-alt"></i> Teilen-Karte
+            </button>
         </div>
+        {% endif %}
 
-        <div id="qr-overlay" onclick="this.style.display='none'" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:1000; justify-content:center; align-items:center; cursor:pointer;">
-            <img src='data:image/jpeg;base64, {{img_b64}}' style='width:min(90vw,90vh); height:min(90vw,90vh); object-fit:contain;'>
+        {% if short_code %}
+        <div class="compare-box">
+            <div class="compare-box-inner">
+                <p class="compare-label">Dein Code</p>
+                <div class="compare-code">{{ short_code }}</div>
+                <p class="compare-hint">Gib deinem Freund diesen Code</p>
+            </div>
+            <div class="compare-divider"></div>
+            <form class="compare-form" action="/compare/join" method="POST">
+                <p class="compare-label">Code deines Freundes</p>
+                <div class="compare-input-row">
+                    <input type="text" name="friend_code" maxlength="4"
+                           placeholder="- - - -"
+                           class="compare-input"
+                           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+                           oninput="this.value=this.value.toUpperCase()" required>
+                    <button type="submit" class="compare-btn">
+                        <i class="fa fa-arrow-right"></i>
+                    </button>
+                </div>
+                {% if request.args.get('code_error') %}
+                <p class="compare-error">Code nicht gefunden – bitte nochmal prüfen.</p>
+                {% endif %}
+            </form>
         </div>
         {% endif %}
 
@@ -110,3 +126,253 @@
             <a href="/" class="restart-btn">Nochmal versuchen</a>
         </div>
     </div>
+
+    <script>
+    (function () {
+        var wrapper = document.getElementById('scratchWrapper');
+        var canvas  = document.getElementById('scratchCanvas');
+        if (!canvas || !wrapper) return;
+        var ctx = canvas.getContext('2d');
+        var revealed   = false;
+        var isDrawing  = false;
+        var scratchCount = 0;
+
+        function initCanvas() {
+            var dpr = window.devicePixelRatio || 1;
+            var w   = wrapper.offsetWidth;
+            var h   = wrapper.offsetHeight;
+            canvas.width  = w * dpr;
+            canvas.height = h * dpr;
+            canvas.style.width  = w + 'px';
+            canvas.style.height = h + 'px';
+            ctx.scale(dpr, dpr);
+            drawSurface();
+        }
+
+        function drawSurface() {
+            var w = wrapper.offsetWidth, h = wrapper.offsetHeight, cx = w / 2, cy = h / 2;
+
+            /* Dunkler Gradient */
+            var grad = ctx.createLinearGradient(0, 0, w, h);
+            grad.addColorStop(0,   '#4a5060');
+            grad.addColorStop(0.4, '#5c6475');
+            grad.addColorStop(1,   '#2e3340');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            /* Shimmer-Textur */
+            for (var i = 0; i < 300; i++) {
+                ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.04) + ')';
+                ctx.beginPath();
+                ctx.arc(Math.random() * w, Math.random() * h, Math.random() * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            /* Glow hinter Flugzeug */
+            var glow = ctx.createRadialGradient(cx, cy - 28, 0, cx, cy - 28, 60);
+            glow.addColorStop(0, 'rgba(236,79,11,0.35)');
+            glow.addColorStop(1, 'rgba(236,79,11,0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(cx, cy - 28, 60, 0, Math.PI * 2);
+            ctx.fill();
+
+            /* Flugzeug (Text-Zeichen, kein Emoji → Farbe steuerbar) */
+            ctx.fillStyle = 'rgba(255,255,255,0.92)';
+            ctx.font = Math.min(52, w * 0.12) + 'px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('✈', cx, cy - 28);
+
+            /* CTA */
+            ctx.fillStyle = '#ec4f0b';
+            ctx.font = 'bold ' + Math.min(22, w * 0.055) + 'px sans-serif';
+            ctx.fillText('Hier freirubbeln!', cx, cy + 26);
+
+            /* Untertitel */
+            ctx.fillStyle = 'rgba(255,255,255,0.45)';
+            ctx.font = Math.min(13, w * 0.032) + 'px sans-serif';
+            ctx.fillText('Dein Reisetyp wartet auf dich', cx, cy + 52);
+
+        }
+
+        function getPos(e) {
+            var rect  = canvas.getBoundingClientRect();
+            var touch = e.touches ? e.touches[0] : e;
+            return {
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            };
+        }
+
+        function doScratch(e) {
+            if (!isDrawing || revealed) return;
+            e.preventDefault();
+            var pos = getPos(e);
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = 'rgba(0,0,0,1)';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 38, 0, Math.PI * 2);
+            ctx.fill();
+            scratchCount++;
+            if (scratchCount % 8 === 0) checkReveal();
+        }
+
+        function checkReveal() {
+            var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            var transparent = 0;
+            for (var i = 3; i < data.length; i += 4) {
+                if (data[i] < 128) transparent++;
+            }
+            if (transparent / (canvas.width * canvas.height) > 0.42) revealAll();
+        }
+
+        function revealAll() {
+            if (revealed) return;
+            revealed = true;
+            canvas.style.transition = 'opacity 0.7s ease';
+            canvas.style.opacity = '0';
+            setTimeout(function() { canvas.remove(); }, 800);
+            launchConfetti();
+        }
+
+        function launchConfetti() {
+            if (typeof confetti !== 'function') return;
+            var duration = 500;
+            var end = Date.now() + duration;
+            var colors = ['#ec4f0b', '#ff7340', '#ffffff', '#ffd700', '#ff4757'];
+            (function frame() {
+                confetti({
+                    particleCount: 6,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0, y: 0.65 },
+                    colors: colors
+                });
+                confetti({
+                    particleCount: 6,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1, y: 0.65 },
+                    colors: colors
+                });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            })();
+        }
+
+        window.addEventListener('load', initCanvas);
+
+        canvas.addEventListener('mousedown',  function(e) { isDrawing = true;  doScratch(e); });
+        canvas.addEventListener('mousemove',  doScratch);
+        canvas.addEventListener('mouseup',    function()  { isDrawing = false; });
+        canvas.addEventListener('mouseleave', function()  { isDrawing = false; });
+        canvas.addEventListener('touchstart', function(e) { isDrawing = true;  doScratch(e); }, { passive: false });
+        canvas.addEventListener('touchmove',  doScratch, { passive: false });
+        canvas.addEventListener('touchend',   function()  { isDrawing = false; });
+    })();
+    </script>
+
+    <!-- ── Teilen-Karte Overlay ─────────────────────────────────── -->
+    {% if img_b64 %}
+    <div id="shareOverlay" onclick="if(event.target===this)closeShareCard()"
+         style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88);
+                z-index:1000; justify-content:center; align-items:center;
+                flex-direction:column; gap:1.25rem; padding:1.5rem;
+                overflow-y:auto; -webkit-overflow-scrolling:touch;">
+
+        <!-- Die Karte selbst (wird als Bild gerendert) -->
+        <div id="shareCard" class="share-card">
+
+            <div class="sc-image-wrap">
+                <img class="sc-city-img"
+                     src="static/Alle_Stadt_Bilder/{{ cities[0][11] }}.jpg"
+                     crossorigin="anonymous">
+                <div class="sc-img-gradient"></div>
+                <span class="sc-badge">#1 Empfehlung</span>
+                <div class="sc-city-info">
+                    <h2 class="sc-city-name">{{ cities[0][0] }}</h2>
+                    <p class="sc-country">{{ cities[0][1] }}</p>
+                </div>
+            </div>
+
+            <div class="sc-separator">
+                <div class="sc-notch left"></div>
+                <div class="sc-dash-line"></div>
+                <div class="sc-notch right"></div>
+            </div>
+
+            <div class="sc-personality-section">
+                <span class="sc-personality-emoji">{{ personality.emoji }}</span>
+                <div>
+                    <p class="sc-personality-label">Dein Reisetyp</p>
+                    <p class="sc-personality-name">{{ personality.name }}</p>
+                </div>
+            </div>
+
+            <div class="sc-qr-section">
+                <img class="sc-qr" src="data:image/jpeg;base64,{{ img_b64 }}">
+                <p class="sc-qr-hint">Zum Scannen halten</p>
+            </div>
+
+            <div class="sc-branding">CityTrip ✈️</div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="sc-actions">
+            <button class="sc-btn primary" id="saveBtn" onclick="saveCard()">
+                <i class="fa fa-download"></i> Speichern
+            </button>
+            <button class="sc-btn" onclick="closeShareCard()">Schließen</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script>
+        function openShareCard() {
+            document.getElementById('shareOverlay').style.display = 'flex';
+        }
+        function closeShareCard() {
+            document.getElementById('shareOverlay').style.display = 'none';
+        }
+
+        async function saveCard() {
+            const btn = document.getElementById('saveBtn');
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Wird erstellt...';
+            btn.disabled = true;
+
+            try {
+                const card = document.getElementById('shareCard');
+                const canvas = await html2canvas(card, {
+                    scale: 3,
+                    useCORS: true,
+                    backgroundColor: '#1a1f26',
+                    logging: false,
+                });
+
+                canvas.toBlob(async (blob) => {
+                    const file = new File([blob], 'citytrip-reiseziel.png', { type: 'image/png' });
+
+                    // Web Share API (iOS/Android Speichern in Galerie)
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        try {
+                            await navigator.share({ files: [file], title: 'Mein CityTrip Reiseziel' });
+                            return;
+                        } catch (e) { /* abgebrochen oder nicht unterstützt */ }
+                    }
+
+                    // Fallback: direkter Download
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'citytrip-reiseziel.png';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }, 'image/png');
+
+            } finally {
+                btn.innerHTML = '<i class="fa fa-download"></i> Speichern';
+                btn.disabled = false;
+            }
+        }
+    </script>
+    {% endif %}
