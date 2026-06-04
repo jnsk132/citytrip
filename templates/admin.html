@@ -258,6 +258,93 @@
         .chip .like-dot    { width: 6px; height: 6px; border-radius: 50%; background: var(--like); flex-shrink: 0; }
         .chip .dislike-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dislike); flex-shrink: 0; }
 
+        /* ── City ranking section ── */
+        .city-ranking-section {
+            padding: 0 2rem 2rem;
+        }
+        .city-ranking-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+        @media (max-width: 700px) {
+            .city-ranking-grid { grid-template-columns: 1fr; }
+        }
+        .ranking-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+        }
+        .ranking-card-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .city-bar-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.6rem;
+        }
+        .city-bar-rank {
+            font-size: 0.75rem;
+            color: var(--muted);
+            width: 18px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+        .city-bar-label {
+            flex: 0 0 130px;
+            min-width: 0;
+        }
+        .city-bar-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .city-bar-country {
+            font-size: 0.7rem;
+            color: var(--muted);
+        }
+        .city-bar-track {
+            flex: 1;
+            height: 8px;
+            background: var(--surface2);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+        .city-bar-fill {
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.4s ease;
+        }
+        .city-bar-fill.most  { background: var(--accent); }
+        .city-bar-fill.least { background: rgba(255,255,255,0.18); }
+        .city-bar-count {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--muted);
+            flex-shrink: 0;
+            width: 28px;
+            text-align: right;
+        }
+        .section-heading {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 1.25rem;
+            padding-left: 2rem;
+        }
+
         /* ── Empty state ── */
         .empty-state {
             text-align: center;
@@ -297,6 +384,53 @@
         <div class="stat-label">Swipes gesamt</div>
     </div>
 </div>
+
+{% if city_stats %}
+{% set max_count = city_stats[0].count %}
+<div class="city-ranking-section">
+    <div class="section-heading">Städte-Häufigkeit in Ergebnissen</div>
+    <div class="city-ranking-grid">
+
+        <!-- Meistbewertete -->
+        <div class="ranking-card">
+            <div class="ranking-card-title"><i class="fa fa-fire"></i> Meistempfohlen (Top 10)</div>
+            {% for item in city_stats[:10] %}
+            <div class="city-bar-item">
+                <span class="city-bar-rank">{{ loop.index }}</span>
+                <div class="city-bar-label">
+                    <div class="city-bar-name">{{ item.city }}</div>
+                    <div class="city-bar-country">{{ item.country }}</div>
+                </div>
+                <div class="city-bar-track">
+                    <div class="city-bar-fill most" style="width: {{ (item.count / max_count * 100)|int }}%"></div>
+                </div>
+                <span class="city-bar-count">{{ item.count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Wenigstbewertete -->
+        <div class="ranking-card">
+            <div class="ranking-card-title"><i class="fa fa-leaf"></i> Seltenste Ergebnisse (Bottom 10)</div>
+            {% set bottom = city_stats[-10:] | reverse | list %}
+            {% for item in bottom %}
+            <div class="city-bar-item">
+                <span class="city-bar-rank">{{ city_stats | length - loop.index0 }}</span>
+                <div class="city-bar-label">
+                    <div class="city-bar-name">{{ item.city }}</div>
+                    <div class="city-bar-country">{{ item.country }}</div>
+                </div>
+                <div class="city-bar-track">
+                    <div class="city-bar-fill least" style="width: {{ [((item.count / max_count * 100)|int), 8] | max }}%"></div>
+                </div>
+                <span class="city-bar-count">{{ item.count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+    </div>
+</div>
+{% endif %}
 
 <div class="main">
 

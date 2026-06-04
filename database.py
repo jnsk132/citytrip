@@ -66,6 +66,15 @@ def init_db():
             score      REAL NOT NULL
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS city_global_stats (
+            city      TEXT PRIMARY KEY,
+            country   TEXT NOT NULL,
+            rank_sum  INTEGER DEFAULT 0,
+            sessions  INTEGER DEFAULT 0,
+            avg_rank  REAL DEFAULT 0
+        )
+    """)
 
     con.commit()
     con.close()
@@ -162,6 +171,15 @@ def create_session():
     return session_id, short_code
 
 
+def get_short_code(session_id):
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("SELECT short_code FROM sessions WHERE id = ?", (session_id,))
+    row = cur.fetchone()
+    con.close()
+    return row[0] if row else None
+
+
 def get_session_id_by_code(short_code):
     con = get_connection()
     cur = con.cursor()
@@ -207,7 +225,14 @@ def get_results(session_id):
     )
     rows = cur.fetchall()
     con.close()
-    return rows
+    # Deduplizieren: nur ersten Eintrag pro Rang behalten (falls /results mehrfach aufgerufen wurde)
+    seen_ranks = set()
+    deduped = []
+    for row in rows:
+        if row[0] not in seen_ranks:
+            seen_ranks.add(row[0])
+            deduped.append(row)
+    return deduped
 
 
 def get_all_sessions_overview():
@@ -308,6 +333,87 @@ def get_global_stats():
         "continent_likes": continent_likes,
         "top_city_counts": top_city_counts,
     }
+
+
+def get_city_shown_counts():
+    """Gibt zurück, wie oft jede Stadt global in Swipes angezeigt wurde."""
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("SELECT city, COUNT(*) FROM swipes GROUP BY city")
+    rows = cur.fetchall()
+    con.close()
+    return {row[0]: row[1] for row in rows}
+
+
+def get_city_result_stats():
+    """Gibt zurück, wie oft jede Stadt in den Ergebnissen (Top-3) aller Sessions vorkam."""
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT r.city, r.country, COUNT(*) as count
+        FROM results r
+        JOIN sessions s ON r.session_id = s.id
+        WHERE s.completed = 1
+        GROUP BY r.city, r.country
+        ORDER BY count DESC
+    """)
+    rows = cur.fetchall()
+    con.close()
+    return [{"city": row[0], "country": row[1], "count": row[2]} for row in rows]
+
+
+def update_city_global_stats(scored_cities):
+    """Aktualisiert laufende Rang-Aggregate pro Stadt.
+    scored_cities: Liste von (score, city_data) sortiert best-first (aus score_all_cities).
+    """
+    con = get_connection()
+    cur = con.cursor()
+    for rank_idx, (_, city) in enumerate(scored_cities):
+        city_name = city[0]
+        country   = city[1]
+        cur.execute("""
+            INSERT INTO city_global_stats (city, country, rank_sum, sessions, avg_rank)
+            VALUES (?, ?, ?, 1, ?)
+            ON CONFLICT(city) DO UPDATE SET
+                rank_sum = rank_sum + excluded.rank_sum,
+                sessions = sessions + 1,
+                avg_rank = CAST(rank_sum + excluded.rank_sum AS REAL) / (sessions + 1)
+        """, (city_name, country, rank_idx, float(rank_idx)))
+    con.commit()
+    con.close()
+
+
+def get_city_avg_ranks():
+    """Gibt {city_name: {"avg_rank": float, "sessions": int}} zurück."""
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("SELECT city, avg_rank, sessions FROM city_global_stats")
+    rows = cur.fetchall()
+    con.close()
+    return {row[0]: {"avg_rank": row[1], "sessions": row[2]} for row in rows}
+
+
+def get_all_completed_swipes():
+    """Gibt alle Swipes aller abgeschlossenen Sessions zurück.
+    Rückgabe: {session_id: [(iteration, city, country, continent, choice), ...]}"""
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT sw.session_id, sw.iteration, sw.city, sw.country, sw.continent, sw.choice
+        FROM swipes sw
+        JOIN sessions s ON sw.session_id = s.id
+        WHERE s.completed = 1
+        ORDER BY sw.session_id, sw.iteration
+    """)
+    rows = cur.fetchall()
+    con.close()
+
+    result = {}
+    for session_id, iteration, city, country, continent, choice in rows:
+        if session_id not in result:
+            result[session_id] = []
+        result[session_id].append((iteration, city, country, continent, choice))
+    return result
 
 
 def complete_session(session_id):

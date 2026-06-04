@@ -141,7 +141,7 @@ body {
 /* Preferences Sektion */
 .preferences-section {
     padding: 3rem 0 5rem;
-    background: linear-gradient(180deg, #292F36 40%, #ec4f0b 100%);
+    /* background: linear-gradient(180deg, #292F36 40%, #ec4f0b 100%); */
     margin-top: 3rem;
 }
 
@@ -670,6 +670,107 @@ body {
     transform: scale(0.94);
 }
 
+/* ── Hidden Gem ──────────────────────────────────────────────── */
+.hidden-gem-section {
+    margin-top: 4rem;
+}
+
+.hidden-gem-section .scratch-hint-text {
+    margin-bottom: 0rem;
+}
+
+.hidden-gem-section .image-wrapper {
+    margin-top: 0;
+}
+
+.hidden-gem-section .image-container {
+    margin-top: 0.5rem;
+}
+
+.gem-section-header {
+    display: flex;
+    justify-content: center;
+    padding: 0 1rem;
+    margin: 1.5rem 0 0;
+}
+
+.gem-section-label {
+    color: #ec4f0b;
+    font-size: clamp(0.75rem, 1.8vmin, 0.9rem);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: bold;
+    margin: 0;
+    width: min(70vw, 700px);
+}
+
+.gem-badge {
+    position: absolute;
+    top: 1.5rem;
+    left: 1.5rem;
+    background: linear-gradient(135deg, #f5c518, #e0a800);
+    color: #1a1200;
+    font-size: clamp(0.7rem, 1.8vmin, 0.85rem);
+    font-weight: bold;
+    padding: 0.3rem 0.85rem;
+    border-radius: 2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    z-index: 10;
+    margin: 0;
+    box-shadow: 0 2px 12px rgba(245, 197, 24, 0.4);
+}
+
+.gem-stats-row {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: #363c45;
+    border-radius: 1.25rem;
+    padding: 1.1rem 1.5rem;
+    width: min(70vw, 700px);
+    border: 1px solid rgba(245, 197, 24, 0.2);
+    margin-bottom: 1rem;
+    box-sizing: border-box;
+}
+
+.gem-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    gap: 0.2rem;
+}
+
+.gem-stat-label {
+    color: #777;
+    font-size: clamp(0.62rem, 1.5vmin, 0.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.gem-stat-value {
+    color: white;
+    font-size: clamp(1rem, 3vmin, 1.3rem);
+    font-weight: bold;
+    line-height: 1;
+}
+
+.gem-stat-divider {
+    width: 1px;
+    height: 2rem;
+    background: rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.gem-desc {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: clamp(0.85rem, 2vmin, 1rem);
+    width: min(70vw, 700px);
+    margin: 0;
+    line-height: 1.6;
+}
+
 /* ── Freund-Vergleich Box ─────────────────────────────────────── */
 .compare-box {
     margin: 0 1.5rem 0.5rem;
@@ -680,6 +781,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .compare-label {
@@ -715,16 +818,22 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0;
+    width: 100%;
+    min-width: 0;
 }
 
 .compare-input-row {
     display: flex;
     gap: 0.6rem;
     margin-top: 0;
+    width: 100%;
+    min-width: 0;
 }
 
 .compare-input {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0;
     background: #252a30;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 0.85rem;
@@ -769,4 +878,200 @@ body {
     color: #ff6b6b;
     font-size: 0.8rem;
     margin: 0.6rem 0 0;
+}
+
+/* ── TODO-Liste ──────────────────────────────────────────────── */
+.todo-section {
+    margin-top: 4rem;
+}
+
+.todo-card {
+    margin: 0.5rem 1.5rem 1rem;
+    background: #363c45;
+    border-radius: 1.5rem;
+    padding: 1.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.todo-subtitle {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: clamp(0.85rem, 2vmin, 1rem);
+    margin: 0 0 1.5rem;
+}
+
+.todo-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.todo-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: #2a2f38;
+    border-radius: 0.9rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: opacity 0.3s ease, border-color 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    will-change: transform;
+}
+
+.todo-item.checked {
+    opacity: 0.4;
+    border-color: transparent;
+}
+
+.todo-checkbox {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border: 2px solid rgba(236, 79, 11, 0.6);
+    border-radius: 5px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.todo-item.checked .todo-checkbox {
+    background: #ec4f0b;
+    border-color: #ec4f0b;
+}
+
+.todo-item.checked .todo-checkbox::after {
+    content: '✓';
+    color: white;
+    font-size: 13px;
+    font-weight: bold;
+    line-height: 1;
+    animation: checkAppear 0.2s ease forwards;
+}
+
+@keyframes checkAppear {
+    from { opacity: 0; transform: scale(0.4); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.todo-text {
+    color: #ddd;
+    font-size: clamp(0.95rem, 2.4vmin, 1.1rem);
+    line-height: 1.4;
+    transition: color 0.3s ease, text-decoration-color 0.3s ease;
+    text-decoration: line-through;
+    text-decoration-color: transparent;
+}
+
+.todo-item.checked .todo-text {
+    color: #777;
+    text-decoration-color: #555;
+}
+
+/* ── Travel Buddy ─────────────────────────────────────────────── */
+.travel-buddy-section {
+    margin: 0.5rem 1.5rem 1rem;
+    background: #363c45;
+    border-radius: 1.5rem;
+    padding: 1.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.buddy-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    gap: 1rem;
+}
+
+.buddy-title {
+    color: white;
+    font-size: clamp(1rem, 3.5vmin, 1.35rem);
+    margin: 0 0 0.2rem;
+    line-height: 1.2;
+}
+
+.buddy-subtitle {
+    color: #666;
+    font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
+    margin: 0;
+}
+
+.buddy-match-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(99, 179, 237, 0.12);
+    border: 1px solid rgba(99, 179, 237, 0.4);
+    border-radius: 1rem;
+    padding: 0.65rem 1.1rem;
+    flex-shrink: 0;
+}
+
+.buddy-match-number {
+    color: #63b3ed;
+    font-size: clamp(1.5rem, 5vmin, 2rem);
+    font-weight: bold;
+    line-height: 1;
+}
+
+.buddy-match-label {
+    color: #63b3ed;
+    font-size: clamp(0.6rem, 1.4vmin, 0.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 0.2rem;
+}
+
+.buddy-personality-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: #2a2f38;
+    border-radius: 1rem;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.buddy-personality-emoji {
+    font-size: clamp(2rem, 7vmin, 2.8rem);
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.buddy-personality-label {
+    color: #666;
+    font-size: clamp(0.68rem, 1.6vmin, 0.8rem);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 0.2rem;
+}
+
+.buddy-personality-name {
+    color: white;
+    font-size: clamp(1rem, 3vmin, 1.2rem);
+    font-weight: bold;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.buddy-desc {
+    color: #888;
+    font-size: clamp(0.85rem, 2.2vmin, 1rem);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.buddy-highlight {
+    color: #63b3ed;
 }

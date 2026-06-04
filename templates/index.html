@@ -52,12 +52,12 @@
             }
 
             /* Überschrift */
-                .main-title {
+            .main-title {
                 margin-top: 1rem;
                 color: white;
-                font-size: 2rem;
+                font-size: clamp(1.8rem, 7vmin, 3rem);
                 line-height: 1.2;
-                padding: 0 10px; /* Verhindert, dass Text am Rand klebt */
+                padding: 0 1rem;
                 word-wrap: break-word;
             }
 
@@ -80,13 +80,13 @@
 
             .btn-start {
                 display: inline-block;
-                padding: 1rem 2rem;
-                font-size: 1rem;
-                color: #000;
-                background-color: #f8f9fa;
+                padding: 1rem 2.5rem;
+                font-size: clamp(1rem, 3vw, 1.25rem);
+                color: #292F36;
+                background-color: white;
                 text-decoration: none;
-                border-radius: 2rem;
-                transition: background-color 0.2s, transform 0.1s;
+                border-radius: 4rem;
+                transition: all 0.3s ease;
                 border: none;
                 cursor: pointer;
                 box-shadow: 10px 10px 40px rgb(28, 28, 28);
@@ -94,11 +94,18 @@
             }
 
             .btn-start:hover {
-                background-color: #e2e6ea;
+                background-color: #ec4f0b;
+                color: white;
+                transform: scale(1.05);
             }
 
-            .btn-start:active {
-                transform: scale(0.98);
+            @media (hover: none) {
+                .btn-start:hover { transform: none; }
+                .btn-start:active {
+                    background-color: #ec4f0b;
+                    color: white;
+                    transform: scale(0.97);
+                }
             }
 
             /* Layout für die Buttons nebeneinander */

@@ -41,9 +41,7 @@ PERSONALITY_TYPES = {
 }
 
 
-def get_personality_type(user):
-    # Netto-Präferenz: liked - disliked, negative Werte auf 0 kappen,
-    # dann auf Summe 1 normalisieren. So fließen Dislikes korrekt ein.
+def _personality_scores(user):
     def net_norm(liked, disliked):
         net = [max(0, liked[i] - disliked[i]) for i in range(len(liked))]
         total = sum(net)
@@ -56,12 +54,10 @@ def get_personality_type(user):
     lo = net_norm(user["count_liked_ocean_distance"], user["count_disliked_ocean_distance"])
     ll = net_norm(user["count_liked_abs_latitude"],   user["count_disliked_abs_latitude"])
 
-    # Strandliebhaber braucht eine klare Dominanz der Küstenpräferenz über
-    # Inlandpräferenz — nur tropisch zu mögen reicht nicht.
-    coast_over_inland  = max(0, lo[0] - lo[2])  # >0 nur wenn Küste > Inland
-    warm_over_cold     = max(0, ll[0] - ll[2])  # >0 nur wenn Tropisch > Kühl
+    coast_over_inland = max(0, lo[0] - lo[2])
+    warm_over_cold    = max(0, ll[0] - ll[2])
 
-    scores = {
+    return {
         "metropolen_fan":  lp[3] * 5,
         "strandliebhaber": coast_over_inland * (4 + warm_over_cold),
         "kulturreisender": ll[1] * 2 + (lp[1] + lp[2]) * 1.5 + lc[1] * 1,
@@ -70,8 +66,85 @@ def get_personality_type(user):
         "entdecker":       ll[2] * 2 + lp[0] * 2 + lo[2] * 1,
     }
 
+
+def get_personality_type(user):
+    scores = _personality_scores(user)
     best_key = max(scores, key=scores.get)
     return PERSONALITY_TYPES[best_key]
+
+
+def get_personality_key(user):
+    scores = _personality_scores(user)
+    return max(scores, key=scores.get)
+
+
+def get_todo_activities(user, cities):
+    """Wählt 5 passende Aktivitäten basierend auf der Top-Stadt und dem Nutzerprofil."""
+    if not cities:
+        return []
+
+    top = cities[0]
+
+    continent      = top[2] if len(top) > 2 else ""
+    country        = top[1] if len(top) > 1 else ""
+    cost_raw       = top[4] if len(top) > 4 and top[4] != '' else "40"
+    population_raw = top[6] if len(top) > 6 else "500000"
+    ocean_raw      = top[7] if len(top) > 7 else "100"
+
+    cost_cat  = categorise([20, 40, 60],              float(cost_raw))
+    pop_cat   = categorise([100000, 500000, 1700000], float(population_raw))
+    ocean_cat = categorise([5, 50],                   float(ocean_raw))
+
+    personality_key = get_personality_key(user)
+
+    # Bedingungen
+    outside_europe = continent != "Europa"
+    is_kultur      = personality_key == "kulturreisender"
+    is_high_price  = cost_cat >= 2   # Gehoben oder Luxuriös
+    is_low_price   = cost_cat <= 1   # Günstig oder Erschwinglich
+    is_ireland     = country == "Irland"
+    is_small_city  = pop_cat == 0    # Kleinstadt
+    near_sea       = ocean_cat <= 1  # Direkt am Meer oder Küstennah
+
+    specific = []
+    sleeping_under_stars = False
+
+    if outside_europe:
+        specific.append("Probiere 3 neue lokale Spezialitäten")
+    if is_kultur:
+        specific.append("Besuche die Nationale Kunstgalerie")
+    if is_high_price:
+        specific.append("Probiere einen neuen Abenteuersport aus")
+    if is_low_price:
+        specific.append("Stelle dir ein 10€-Outfit in einem Second-Hand-Laden zusammen")
+    if is_ireland:
+        specific.append("Trinke ein Guinness in einem Pub")
+    if is_small_city:
+        specific.append("Schlafe unter den Sternen")
+        sleeping_under_stars = True
+    if near_sea:
+        specific.append("Springe von einer Klippe ins Wasser")
+        if not sleeping_under_stars:
+            specific.append("Schlafe am Strand")
+
+    universal = [
+        "Stehe früh auf und sieh den Sonnenaufgang",
+        "Leihe dir einen Motorroller aus und erkunde das Umland",
+        "Mache eine Fototour zu einem bestimmten Thema (Farben, Schatten, Türen, …)",
+        "Filme deinen Urlaub wie eine Dokumentation",
+        "Schreibe eine Postkarte an deine Freunde und Familie",
+        "Singe Karaoke in einer anderen Sprache",
+    ]
+
+    random.shuffle(specific)
+    result = specific[:5]
+
+    if len(result) < 5:
+        available = [u for u in universal if u not in result]
+        random.shuffle(available)
+        result += available[:5 - len(result)]
+
+    return result
 
 
 # Labels für die Bins jeder Kategorie
@@ -228,7 +301,8 @@ def standard_deviation(data):
     return var ** 0.5
 
 # Nächste Stadt aus csv holen – bevorzugt Städte aus wenig gesehenen Kategorien
-def get_next_city(user, city_list, extra_seen=None):
+# und gewichtet nach inverser globaler Zeig-Häufigkeit für ausgeglichene Abdeckung
+def get_next_city(user, city_list, extra_seen=None, city_shown_counts=None):
     cost_categories       = [20, 40, 60]
     population_categories = [100000, 500000, 1700000]
     ocean_categories      = [5, 50]
@@ -237,6 +311,12 @@ def get_next_city(user, city_list, extra_seen=None):
     seen = set(user["liked_cities"] + user["disliked_cities"])
     if extra_seen:
         seen |= extra_seen
+
+    def weighted_choice(candidates):
+        if not city_shown_counts:
+            return random.choice(candidates)
+        weights = [1.0 / (city_shown_counts.get(c[0], 0) + 1) for c in candidates]
+        return random.choices(candidates, weights=weights, k=1)[0]
 
     # Abdeckung pro Bin berechnen (liked + disliked)
     cost_seen  = [user["count_liked_cost"][i]             + user["count_disliked_cost"][i]             for i in range(4)]
@@ -274,11 +354,11 @@ def get_next_city(user, city_list, extra_seen=None):
             candidates.append(city)
 
         if candidates:
-            return random.choice(candidates)
+            return weighted_choice(candidates)
 
-    # Fallback: rein zufällig aus allen noch nicht gesehenen Städten
+    # Fallback: gewichtet zufällig aus allen noch nicht gesehenen Städten
     available = [city for city in city_list if city[0] not in seen]
-    return random.choice(available)
+    return weighted_choice(available)
 
 # Gibt für jede Stelle jeder Kategorie Wert zurück, wie sehr sie user gefällt
 def calculate_user_preference(user):
@@ -441,6 +521,39 @@ def get_city_description(city, used_descriptions):
 
     return f"{pop_text} {cost_text} {ocean_text} {lat_text}"
 
+def score_all_cities(user, user_preferences, city_list):
+    """Berechnet Scores für alle Städte ohne 'bereits gesehen'-Filter. Für Gruppenvergleiche."""
+    cost_cats  = [20, 40, 60]
+    pop_cats   = [100000, 500000, 1700000]
+    ocean_cats = [5, 50]
+    lat_cats   = [30, 60]
+
+    avg_weight = (user_preferences["weight_cost"] +
+                  user_preferences["weight_population"] +
+                  user_preferences["weight_ocean_distance"] +
+                  user_preferences["weight_latitude"]) / 4
+    country_bonus   = avg_weight * 0.5
+    continent_bonus = avg_weight * 1.5
+
+    scored = []
+    for city in city_list:
+        score = 0
+        if city[1] in user["liked_countries"]:    score += country_bonus
+        if city[1] in user["disliked_countries"]: score -= country_bonus
+        if city[2] in user["liked_continents"]:   score += continent_bonus
+        if city[2] in user["disliked_continents"]: score -= continent_bonus
+
+        if city[4] != '':
+            score += user_preferences["weight_cost"] * user_preferences["cost"][categorise(cost_cats, city[4])]
+        score += user_preferences["weight_population"]     * user_preferences["population"][categorise(pop_cats, city[6])]
+        score += user_preferences["weight_ocean_distance"] * user_preferences["ocean_distance"][categorise(ocean_cats, city[7])]
+        score += user_preferences["weight_latitude"]       * user_preferences["latitude"][categorise(lat_cats, city[8])]
+        scored.append((score, city))
+
+    scored.sort(key=lambda x: (x[0], -float(x[1][3]) if x[1][3] != '' else 0), reverse=True)
+    return scored
+
+
 # Für jede Stadt kann basierend auf den Präferenzen des users ein Score berechnet werden --> gibt dann die drei Städte mit dem höchsten Score zurück
 def calculate_city_score(user, user_preferences, city_list):
     cost_index_categories = [20, 40, 60] 
@@ -539,3 +652,127 @@ def calculate_city_score(user, user_preferences, city_list):
 
     print(top_3_cities)
     return top_3_cities, display_sd, scored_cities
+
+
+def _preference_vector(user):
+    """Erstellt einen normalisierten 14-dimensionalen Geschmacksvektor (net_norm pro Bin-Gruppe)."""
+    def net_norm(liked, disliked):
+        net = [max(0, liked[i] - disliked[i]) for i in range(len(liked))]
+        total = sum(net)
+        return [x / total for x in net] if total > 0 else [1 / len(liked)] * len(liked)
+
+    return (
+        net_norm(user["count_liked_cost"],           user["count_disliked_cost"]) +
+        net_norm(user["count_liked_population"],     user["count_disliked_population"]) +
+        net_norm(user["count_liked_ocean_distance"], user["count_disliked_ocean_distance"]) +
+        net_norm(user["count_liked_abs_latitude"],   user["count_disliked_abs_latitude"])
+    )
+
+
+def _cosine_similarity(a, b):
+    dot   = sum(x * y for x, y in zip(a, b))
+    mag_a = sum(x ** 2 for x in a) ** 0.5
+    mag_b = sum(x ** 2 for x in b) ** 0.5
+    return dot / (mag_a * mag_b) if mag_a and mag_b else 0
+
+
+def find_travel_buddy(current_user, current_session_id, city_list, all_swipes):
+    """Findet aus allen abgeschlossenen Sessions die ähnlichste.
+    all_swipes: {session_id: [(iteration, city, country, continent, choice), ...]}
+    """
+    city_map  = {city[0]: city for city in city_list}
+    my_vector = _preference_vector(current_user)
+
+    best_sim         = -1
+    best_personality = None
+    total_others     = 0
+
+    for session_id, swipes in all_swipes.items():
+        if session_id == current_session_id:
+            continue
+        total_others += 1
+
+        other_user = {
+            "liked_rankings": [], "liked_cities": [], "liked_countries": [], "liked_continents": [],
+            "count_liked_cost": [0,0,0,0], "count_liked_population": [0,0,0,0],
+            "count_liked_ocean_distance": [0,0,0], "count_liked_abs_latitude": [0,0,0],
+            "disliked_rankings": [], "disliked_cities": [], "disliked_countries": [], "disliked_continents": [],
+            "count_disliked_cost": [0,0,0,0], "count_disliked_population": [0,0,0,0],
+            "count_disliked_ocean_distance": [0,0,0], "count_disliked_abs_latitude": [0,0,0],
+        }
+        for _, city_name, _, _, choice in swipes:
+            city_data = city_map.get(city_name)
+            if city_data:
+                scoring(city_data, other_user, choice == "like")
+
+        sim = _cosine_similarity(my_vector, _preference_vector(other_user))
+        if sim > best_sim:
+            best_sim         = sim
+            best_personality = get_personality_type(other_user)
+
+    if total_others == 0 or best_personality is None:
+        return None
+
+    return {
+        "match_pct":     round(best_sim * 100),
+        "total_players": total_others,
+        "personality":   best_personality,
+    }
+
+
+def find_hidden_gem(user, scored_cities, city_avg_ranks, min_sessions=3):
+    """Findet eine Stadt, die persönlich hoch rankt aber global selten gut abschneidet.
+    scored_cities: vollständige Rangliste aus score_all_cities() (best-first).
+    city_avg_ranks: dict aus get_city_avg_ranks().
+    """
+    if not city_avg_ranks or not scored_cities:
+        return None
+
+    seen  = set(user["liked_cities"] + user["disliked_cities"])
+    total = len(scored_cities)
+
+    # Top-3 des Users ermitteln (erste 3 nicht-gesehenen Städte)
+    top3 = set()
+    for _, city in scored_cities:
+        if city[0] not in seen:
+            top3.add(city[0])
+            if len(top3) == 3:
+                break
+
+    best_score = -1
+    best_city  = None
+    best_info  = None
+
+    for personal_rank, (_, city) in enumerate(scored_cities):
+        name = city[0]
+
+        if name in seen or name in top3:
+            continue
+
+        stats = city_avg_ranks.get(name)
+        if not stats or stats["sessions"] < min_sessions:
+            continue
+
+        # Muss persönlich in den Top 25% liegen
+        if personal_rank / total > 0.25:
+            continue
+
+        global_obscurity = stats["avg_rank"] / total   # [0,1]: 1 = immer am Ende
+        personal_fit     = 1 - (personal_rank / total) # [0,1]: 1 = persönlich auf Platz 1
+
+        gem_score = global_obscurity * personal_fit
+
+        if gem_score > best_score:
+            best_score = gem_score
+            best_city  = city
+            best_info  = {
+                "personal_rank":   personal_rank + 1,
+                "global_avg_rank": round(stats["avg_rank"] + 1),
+                "total":           total,
+                "sessions":        stats["sessions"],
+            }
+
+    if best_city is None:
+        return None
+
+    return {"city": list(best_city), "info": best_info}

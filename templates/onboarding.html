@@ -82,19 +82,22 @@
 
         .btn-next {
             padding: 1rem 2.5rem;
-            font-size: 1rem;
+            font-size: clamp(1rem, 3vw, 1.25rem);
             font-weight: bold;
-            color: #000;
-            background: #f8f9fa;
+            color: #292F36;
+            background: white;
             border: none;
-            border-radius: 2rem;
+            border-radius: 4rem;
             cursor: pointer;
             box-shadow: 10px 10px 40px rgba(28,28,28,0.5);
-            transition: background 0.2s, transform 0.1s;
+            transition: all 0.3s ease;
             display: inline-block;
         }
-        .btn-next:hover  { background: #e2e6ea; }
-        .btn-next:active { transform: scale(0.97); }
+        .btn-next:hover { background: #ec4f0b; color: white; transform: scale(1.05); }
+        @media (hover: none) {
+            .btn-next:hover { transform: none; }
+            .btn-next:active { background: #ec4f0b; color: white; transform: scale(0.97); }
+        }
 
         /* Dots */
         .dots { display: flex; gap: 0.5rem; margin-bottom: 1.75rem; }

@@ -87,6 +87,57 @@
         </div>
         {% endif %}
 
+        {% if travel_buddy %}
+        <div class="travel-buddy-section">
+            <div class="buddy-top">
+                <div>
+                    <h2 class="buddy-title">Dein Travelbuddy</h2>
+                    <p class="buddy-subtitle">Von {{ travel_buddy.total_players }} anderen Spielern analysiert</p>
+                </div>
+                <div class="buddy-match-badge">
+                    <span class="buddy-match-number">{{ travel_buddy.match_pct }}%</span>
+                    <span class="buddy-match-label">Match</span>
+                </div>
+            </div>
+
+            <div class="buddy-personality-row">
+                <span class="buddy-personality-emoji">{{ travel_buddy.personality.emoji }}</span>
+                <div>
+                    <p class="buddy-personality-label">Dein Buddy ist...</p>
+                    <p class="buddy-personality-name">{{ travel_buddy.personality.name }}</p>
+                </div>
+            </div>
+
+            <p class="buddy-desc">
+                Von allen <strong>{{ travel_buddy.total_players }}</strong> anderen Spielern, die bisher teilgenommen haben,
+                gibt es einen, dessen Geschmack sich zu
+                <strong class="buddy-highlight">{{ travel_buddy.match_pct }}%</strong>
+                mit deinem deckt!
+            </p>
+        </div>
+        {% endif %}
+
+        {% if hidden_gem %}
+        <div class="hidden-gem-section">
+            <div class="descriptive-container">
+                <h1 class="title">Dein Hidden Gem</h1>
+                <p class="scratch-hint-text">Diese Stadt passt deutlich besser zu dir als zu anderen Spielern – dein persönlicher Geheimtipp.</p>
+            </div>
+            <div class="image-wrapper">
+                <div class="image-container">
+                    <p class="gem-badge">Hidden Gem</p>
+                    <img class="cropped_img" src="static/Alle_Stadt_Bilder/{{ hidden_gem.city[11] }}.jpg" alt="Stadtbild">
+                    <div class="gradient-overlay"></div>
+                    <div class="image-content">
+                        <h1 class="city_text">{{ hidden_gem.city[0] }}</h1>
+                        <p class="country_text">{{ hidden_gem.city[1] }}</p>
+                    </div>
+                </div>
+            </div>
+        
+        </div>
+        {% endif %}
+
         {% if img_b64 %}
         <div class="button-wrapper">
             <button class="restart-btn" onclick="openShareCard()">
@@ -120,6 +171,74 @@
                 {% endif %}
             </form>
         </div>
+        {% endif %}
+
+        {% if todo_activities %}
+        <div class="todo-section">
+            <div class="descriptive-container">
+                <h1 class="title">Deine TODO-Liste</h1>
+                <p class="scratch-hint-text">5 Dinge, die du auf dieser Reise unbedingt machen solltest</p>
+            </div>
+            <div class="todo-card">
+                <ol class="todo-list" id="todoList">
+                    {% for activity in todo_activities %}
+                    <li class="todo-item">
+                        <span class="todo-checkbox"></span>
+                        <span class="todo-text">{{ activity }}</span>
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var list = document.getElementById('todoList');
+            if (!list) return;
+
+            function snapPositions() {
+                var map = new Map();
+                list.querySelectorAll('.todo-item').forEach(function (el) {
+                    map.set(el, el.getBoundingClientRect().top);
+                });
+                return map;
+            }
+
+            function flipAnimate(oldTops) {
+                list.querySelectorAll('.todo-item').forEach(function (el) {
+                    var oldTop = oldTops.get(el);
+                    if (oldTop === undefined) return;
+                    var delta = oldTop - el.getBoundingClientRect().top;
+                    if (Math.abs(delta) < 1) return;
+                    el.style.transition = 'none';
+                    el.style.transform = 'translateY(' + delta + 'px)';
+                    requestAnimationFrame(function () {
+                        requestAnimationFrame(function () {
+                            el.style.transition = 'transform 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                            el.style.transform = '';
+                        });
+                    });
+                });
+            }
+
+            list.querySelectorAll('.todo-item').forEach(function (item) {
+                item.addEventListener('click', function () {
+                    var isChecked = item.classList.contains('checked');
+                    var oldTops = snapPositions();
+
+                    if (isChecked) {
+                        item.classList.remove('checked');
+                        var firstChecked = list.querySelector('.todo-item.checked');
+                        list.insertBefore(item, firstChecked || list.firstChild);
+                    } else {
+                        item.classList.add('checked');
+                        list.appendChild(item);
+                    }
+
+                    flipAnimate(oldTops);
+                });
+            });
+        })();
+        </script>
         {% endif %}
 
         <div class="button-wrapper">
