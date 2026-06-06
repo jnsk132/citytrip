@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Dein Reiseziel</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="static/results-style.css">
+    <link rel="stylesheet" href="/static/results-style.css">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
 <body>
@@ -22,7 +22,7 @@
         <div class="image-wrapper">
             <div class="image-container">
                 <p class="rank-badge">#{{loop.index}}</p>
-                <img class="cropped_img" src="static/Alle_Stadt_Bilder/{{city[11]}}.jpg" alt="Stadtbild">
+                <img class="cropped_img" src="/static/Alle_Stadt_Bilder/{{city[11]}}.jpg" alt="Stadtbild">
                 <div class="gradient-overlay"></div>
                 <div class="image-content">
                     <h1 class="city_text">{{city[0]}}</h1>
@@ -87,37 +87,12 @@
         </div>
         {% endif %}
 
-        {% if travel_buddy %}
-        <div class="travel-buddy-section">
-            <div class="buddy-top">
-                <div>
-                    <h2 class="buddy-title">Dein Travelbuddy</h2>
-                    <p class="buddy-subtitle">Von {{ travel_buddy.total_players }} anderen Spielern analysiert</p>
-                </div>
-                <div class="buddy-match-badge">
-                    <span class="buddy-match-number">{{ travel_buddy.match_pct }}%</span>
-                    <span class="buddy-match-label">Match</span>
-                </div>
-            </div>
+        <div class="bonus-scroller-wrap">
+        <div class="bonus-scroller" id="bonusScroller">
 
-            <div class="buddy-personality-row">
-                <span class="buddy-personality-emoji">{{ travel_buddy.personality.emoji }}</span>
-                <div>
-                    <p class="buddy-personality-label">Dein Buddy ist...</p>
-                    <p class="buddy-personality-name">{{ travel_buddy.personality.name }}</p>
-                </div>
-            </div>
-
-            <p class="buddy-desc">
-                Von allen <strong>{{ travel_buddy.total_players }}</strong> anderen Spielern, die bisher teilgenommen haben,
-                gibt es einen, dessen Geschmack sich zu
-                <strong class="buddy-highlight">{{ travel_buddy.match_pct }}%</strong>
-                mit deinem deckt!
-            </p>
-        </div>
-        {% endif %}
 
         {% if hidden_gem %}
+        <div class="bonus-slide">
         <div class="hidden-gem-section">
             <div class="descriptive-container">
                 <h1 class="title">Dein Hidden Gem</h1>
@@ -126,7 +101,7 @@
             <div class="image-wrapper">
                 <div class="image-container">
                     <p class="gem-badge">Hidden Gem</p>
-                    <img class="cropped_img" src="static/Alle_Stadt_Bilder/{{ hidden_gem.city[11] }}.jpg" alt="Stadtbild">
+                    <img class="cropped_img" src="/static/Alle_Stadt_Bilder/{{ hidden_gem.city[11] }}.jpg" alt="Stadtbild">
                     <div class="gradient-overlay"></div>
                     <div class="image-content">
                         <h1 class="city_text">{{ hidden_gem.city[0] }}</h1>
@@ -134,46 +109,85 @@
                     </div>
                 </div>
             </div>
-        
+        </div>
         </div>
         {% endif %}
 
-        {% if img_b64 %}
-        <div class="button-wrapper">
-            <button class="restart-btn" onclick="openShareCard()">
-                <i class="fa fa-share-alt"></i> Teilen-Karte
-            </button>
-        </div>
-        {% endif %}
-
-        {% if short_code %}
-        <div class="compare-box">
-            <div class="compare-box-inner">
-                <p class="compare-label">Dein Code</p>
-                <div class="compare-code">{{ short_code }}</div>
-                <p class="compare-hint">Gib deinem Freund diesen Code</p>
+        {% if travel_buddy %}
+        <div class="bonus-slide">
+        <div class="travel-buddy-section">
+            <div class="descriptive-container">
+                <h1 class="title">Dein Travel Buddy</h1>
+                <p class="scratch-hint-text">Unter {{ travel_buddy.total_players }} Spielern ist das dein perfekter Reisebegleiter.</p>
             </div>
-            <div class="compare-divider"></div>
-            <form class="compare-form" action="/compare/join" method="POST">
-                <p class="compare-label">Code deines Freundes</p>
-                <div class="compare-input-row">
-                    <input type="text" name="friend_code" maxlength="4"
-                           placeholder="- - - -"
-                           class="compare-input"
-                           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
-                           oninput="this.value=this.value.toUpperCase()" required>
-                    <button type="submit" class="compare-btn">
-                        <i class="fa fa-arrow-right"></i>
-                    </button>
+            <div class="buddy-card">
+
+                <!-- Header: Avatar + Match-Badge -->
+                <div class="buddy-header">
+                    <div class="buddy-avatar-wrap">
+                        <div class="buddy-avatar"><span>🤠</span></div>
+                        <div class="buddy-match-badge">
+                            <span class="buddy-match-number">{{ travel_buddy.match_pct }}%</span>
+                            <span class="buddy-match-label">Match</span>
+                        </div>
+                    </div>
                 </div>
-                {% if request.args.get('code_error') %}
-                <p class="compare-error">Code nicht gefunden – bitte nochmal prüfen.</p>
+
+                <!-- Top 3 des Buddys -->
+                {% if travel_buddy.buddy_top3 %}
+                <div class="buddy-top3-section">
+                    <p class="buddy-section-label">Top 3 des Buddys</p>
+                    <div class="buddy-top3-row">
+                        {% for city in travel_buddy.buddy_top3 %}
+                        <div class="buddy-top3-item">
+                            <div class="buddy-top3-img-wrap">
+                                <img class="buddy-top3-img" src="/static/Alle_Stadt_Bilder/{{ city[11] }}.jpg" alt="{{ city[0] }}">
+                                <div class="buddy-top3-gradient"></div>
+                                <span class="buddy-top3-rank">#{{ loop.index }}</span>
+                                <div class="buddy-top3-overlay">
+                                    <p class="buddy-top3-name">{{ city[0] }}</p>
+                                    <p class="buddy-top3-country">{{ city[1] }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
                 {% endif %}
-            </form>
+
+                <!-- Bestes Match -->
+                {% if travel_buddy.shared_city %}
+                <div class="buddy-match-wrap">
+                    <p class="buddy-section-label">Wo ihr gemeinsam hin solltet</p>
+                    <div class="buddy-city-card">
+                        <img class="buddy-city-img" src="/static/Alle_Stadt_Bilder/{{ travel_buddy.shared_city[11] }}.jpg" alt="Stadtbild">
+                        <div class="buddy-city-gradient"></div>
+                        <div class="buddy-city-overlay">
+                            <p class="buddy-city-name">{{ travel_buddy.shared_city[0] }}</p>
+                            <p class="buddy-city-country">{{ travel_buddy.shared_city[1] }}</p>
+                        </div>
+                    </div>
+                    {% if travel_buddy.shared_city_my_rank and travel_buddy.shared_city_buddy_rank %}
+                    <p class="buddy-city-ranks">
+                        {% if travel_buddy.shared_city_my_rank == travel_buddy.shared_city_buddy_rank %}
+                        Bei euch beiden auf Platz {{ travel_buddy.shared_city_my_rank }}
+                        {% else %}
+                        Du #{{ travel_buddy.shared_city_my_rank }} · Buddy #{{ travel_buddy.shared_city_buddy_rank }}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
         </div>
         {% endif %}
+
+        
 
         {% if todo_activities %}
+        <div class="bonus-slide">
         <div class="todo-section">
             <div class="descriptive-container">
                 <h1 class="title">Deine TODO-Liste</h1>
@@ -190,6 +204,7 @@
                 </ol>
             </div>
         </div>
+        </div><!-- /.bonus-slide -->
         <script>
         (function () {
             var list = document.getElementById('todoList');
@@ -239,6 +254,76 @@
             });
         })();
         </script>
+        {% endif %}
+
+        </div><!-- /.bonus-scroller -->
+        <div class="bonus-scrollbar-row">
+            <button class="bonus-arrow" aria-label="Zurück" onclick="bonusScroll(-1)">
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 2L2 8L8 14" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="bonus-scrollbar-track"><div class="bonus-scrollbar-thumb" id="bonusThumb"></div></div>
+            <button class="bonus-arrow" aria-label="Weiter" onclick="bonusScroll(1)">
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 2L8 8L2 14" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+        </div>
+        </div><!-- /.bonus-scroller-wrap -->
+
+        <script>
+        function bonusScroll(dir) {
+            var scroller = document.getElementById('bonusScroller');
+            if (!scroller) return;
+            scroller.scrollBy({ left: dir * scroller.offsetWidth, behavior: 'smooth' });
+        }
+        (function () {
+            var scroller = document.getElementById('bonusScroller');
+            var thumb    = document.getElementById('bonusThumb');
+            if (!scroller || !thumb) return;
+            function update() {
+                var ratio = scroller.scrollLeft / (scroller.scrollWidth - scroller.offsetWidth);
+                var trackW = thumb.parentElement.offsetWidth;
+                var thumbW = trackW / (scroller.scrollWidth / scroller.offsetWidth);
+                thumb.style.width = thumbW + 'px';
+                thumb.style.transform = 'translateX(' + (ratio * (trackW - thumbW)) + 'px)';
+            }
+            scroller.addEventListener('scroll', update, { passive: true });
+            window.addEventListener('resize', update);
+            update();
+        })();
+        </script>
+
+        {% if img_b64 %}
+        <div class="button-wrapper">
+            <button class="restart-btn" onclick="openShareCard()">
+                <i class="fa fa-share-alt"></i> Teilen-Karte
+            </button>
+        </div>
+        {% endif %}
+
+        {% if short_code %}
+        <div class="compare-box">
+            <div class="compare-box-inner">
+                <p class="compare-label">Dein Code</p>
+                <div class="compare-code">{{ short_code }}</div>
+                <p class="compare-hint">Gib deinem Freund diesen Code</p>
+            </div>
+            <div class="compare-divider"></div>
+            <form class="compare-form" action="/compare/join" method="POST">
+                <p class="compare-label">Code deines Freundes</p>
+                <div class="compare-input-row">
+                    <input type="text" name="friend_code" maxlength="4"
+                           placeholder="- - - -"
+                           class="compare-input"
+                           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+                           oninput="this.value=this.value.toUpperCase()" required>
+                    <button type="submit" class="compare-btn">
+                        <i class="fa fa-arrow-right"></i>
+                    </button>
+                </div>
+                {% if request.args.get('code_error') %}
+                <p class="compare-error">Code nicht gefunden – bitte nochmal prüfen.</p>
+                {% endif %}
+            </form>
+        </div>
         {% endif %}
 
         <div class="button-wrapper">
@@ -404,7 +489,7 @@
 
             <div class="sc-image-wrap">
                 <img class="sc-city-img"
-                     src="static/Alle_Stadt_Bilder/{{ cities[0][11] }}.jpg"
+                     src="/static/Alle_Stadt_Bilder/{{ cities[0][11] }}.jpg"
                      crossorigin="anonymous">
                 <div class="sc-img-gradient"></div>
                 <span class="sc-badge">#1 Empfehlung</span>

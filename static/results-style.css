@@ -670,6 +670,64 @@ body {
     transform: scale(0.94);
 }
 
+/* ── Bonus Horizontal Scroller ───────────────────────────────── */
+.bonus-scroller-wrap {
+    position: relative;
+}
+.bonus-scroller {
+    display: flex;
+    overflow-x: scroll;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.bonus-scroller::-webkit-scrollbar { display: none; }
+.bonus-slide {
+    flex: 0 0 100%;
+    min-width: 0;
+    scroll-snap-align: start;
+}
+.bonus-scrollbar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.75rem 1.5rem 0;
+}
+.bonus-scrollbar-track {
+    flex: 1;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 99px;
+    overflow: hidden;
+}
+.bonus-scrollbar-thumb {
+    height: 100%;
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 99px;
+    transition: transform 0.1s linear;
+}
+.bonus-arrow {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 0;
+    line-height: 0;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: background 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.bonus-arrow:hover { background: rgba(255, 255, 255, 0.22); }
+
 /* ── Hidden Gem ──────────────────────────────────────────────── */
 .hidden-gem-section {
     margin-top: 4rem;
@@ -978,100 +1036,215 @@ body {
 
 /* ── Travel Buddy ─────────────────────────────────────────────── */
 .travel-buddy-section {
+    margin-top: 4rem;
+}
+
+.buddy-card {
     margin: 0.5rem 1.5rem 1rem;
     background: #363c45;
     border-radius: 1.5rem;
     padding: 1.75rem;
     border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.buddy-top {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Header: Avatar + Match */
+.buddy-header {
+    display: flex;
+    justify-content: center;
+}
+
+.buddy-avatar-wrap {
+    position: relative;
+    width: fit-content;
+}
+
+.buddy-avatar {
+    width: 5rem;
+    height: 5rem;
+    border-radius: 50%;
+    background: #2a2f38;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    display: flex;
     align-items: center;
-    margin-bottom: 1.25rem;
-    gap: 1rem;
-}
-
-.buddy-title {
-    color: white;
-    font-size: clamp(1rem, 3.5vmin, 1.35rem);
-    margin: 0 0 0.2rem;
-    line-height: 1.2;
-}
-
-.buddy-subtitle {
-    color: #666;
-    font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
-    margin: 0;
+    justify-content: center;
+    font-size: 2.4rem;
+    line-height: 1;
 }
 
 .buddy-match-badge {
+    position: absolute;
+    bottom: -0.3rem;
+    right: -2rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(99, 179, 237, 0.12);
-    border: 1px solid rgba(99, 179, 237, 0.4);
-    border-radius: 1rem;
-    padding: 0.65rem 1.1rem;
-    flex-shrink: 0;
+    background: rgba(99, 179, 237, 0.15);
+    border: 1px solid rgba(99, 179, 237, 0.45);
+    border-radius: 0.75rem;
+    padding: 0.3rem 0.65rem;
 }
 
 .buddy-match-number {
     color: #63b3ed;
-    font-size: clamp(1.5rem, 5vmin, 2rem);
+    font-size: clamp(1rem, 3.2vmin, 1.2rem);
     font-weight: bold;
     line-height: 1;
 }
 
 .buddy-match-label {
     color: #63b3ed;
-    font-size: clamp(0.6rem, 1.4vmin, 0.75rem);
+    font-size: 0.58rem;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-top: 0.2rem;
+    letter-spacing: 0.08em;
+    margin-top: 0.1rem;
 }
 
-.buddy-personality-row {
+/* Abschnitts-Label (wie rarity-category) */
+.buddy-section-label {
+    color: #777;
+    font-size: clamp(0.62rem, 1.5vmin, 0.74rem);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: bold;
+    margin: 0 0 0.75rem;
+}
+
+/* Top 3 des Buddys */
+.buddy-top3-section {
+    width: 100%;
+}
+
+.buddy-top3-row {
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: #2a2f38;
-    border-radius: 1rem;
-    padding: 0.9rem 1.1rem;
-    margin-bottom: 1.1rem;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 0.6rem;
 }
 
-.buddy-personality-emoji {
-    font-size: clamp(2rem, 7vmin, 2.8rem);
-    line-height: 1;
-    flex-shrink: 0;
+.buddy-top3-item {
+    flex: 1;
+    min-width: 0;
 }
 
-.buddy-personality-label {
-    color: #666;
-    font-size: clamp(0.68rem, 1.6vmin, 0.8rem);
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    margin: 0 0 0.2rem;
+.buddy-top3-img-wrap {
+    position: relative;
+    border-radius: 0.85rem;
+    overflow: hidden;
 }
 
-.buddy-personality-name {
+.buddy-top3-img {
+    width: 100%;
+    height: clamp(80px, 22vw, 130px);
+    object-fit: cover;
+    display: block;
+}
+
+.buddy-top3-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.05) 55%);
+}
+
+.buddy-top3-rank {
+    position: absolute;
+    top: 0.45rem;
+    left: 0.55rem;
     color: white;
-    font-size: clamp(1rem, 3vmin, 1.2rem);
+    font-size: clamp(0.75rem, 2.2vmin, 0.9rem);
+    font-weight: bold;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    line-height: 1;
+}
+
+.buddy-top3-overlay {
+    position: absolute;
+    bottom: 0.5rem;
+    left: 0;
+    right: 0;
+    text-align: center;
+    padding: 0 0.3rem;
+}
+
+.buddy-top3-name {
+    color: white;
+    font-size: clamp(0.72rem, 2vmin, 0.88rem);
+    font-weight: bold;
+    margin: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.buddy-top3-country {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: clamp(0.6rem, 1.5vmin, 0.72rem);
+    margin: 0.1rem 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Bestes Match – Stadtkarte */
+.buddy-city-card {
+    position: relative;
+    border-radius: 1.25rem;
+    overflow: hidden;
+    width: 100%;
+}
+
+.buddy-city-img {
+    width: 100%;
+    height: clamp(150px, 38vw, 220px);
+    object-fit: cover;
+    display: block;
+}
+
+.buddy-city-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.05) 55%);
+}
+
+/* buddy-city-hint wird nicht mehr verwendet */
+
+.buddy-city-overlay {
+    position: absolute;
+    bottom: 0.85rem;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    width: 100%;
+    padding: 0 1rem;
+    box-sizing: border-box;
+}
+
+.buddy-city-name {
+    color: white;
+    font-size: clamp(1.2rem, 4vmin, 1.6rem);
     font-weight: bold;
     margin: 0;
     line-height: 1.2;
 }
 
-.buddy-desc {
-    color: #888;
-    font-size: clamp(0.85rem, 2.2vmin, 1rem);
-    line-height: 1.6;
+.buddy-city-country {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: clamp(0.8rem, 2.2vmin, 1rem);
+    margin: 0.1rem 0 0;
+}
+
+.buddy-match-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.buddy-city-ranks {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
+    text-align: center;
     margin: 0;
 }
 
-.buddy-highlight {
-    color: #63b3ed;
-}

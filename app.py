@@ -421,7 +421,12 @@ def compare_group():
 def admin():
     sessions = get_all_sessions_overview()
     city_stats = get_city_result_stats()
-    return render_template("admin.html", sessions=sessions, city_stats=city_stats)
+    shown_counts = get_city_shown_counts()
+    city_shown_list = sorted(
+        [{"city": c[0], "country": c[1], "count": shown_counts.get(c[0], 0)} for c in city_list],
+        key=lambda x: x["count"]
+    )
+    return render_template("admin.html", sessions=sessions, city_stats=city_stats, city_shown_list=city_shown_list)
 
 
 if __name__ == '__main__':

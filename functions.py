@@ -312,53 +312,50 @@ def get_next_city(user, city_list, extra_seen=None, city_shown_counts=None):
     if extra_seen:
         seen |= extra_seen
 
-    def weighted_choice(candidates):
-        if not city_shown_counts:
-            return random.choice(candidates)
-        weights = [1.0 / (city_shown_counts.get(c[0], 0) + 1) for c in candidates]
-        return random.choices(candidates, weights=weights, k=1)[0]
-
     # Abdeckung pro Bin berechnen (liked + disliked)
     cost_seen  = [user["count_liked_cost"][i]             + user["count_disliked_cost"][i]             for i in range(4)]
     pop_seen   = [user["count_liked_population"][i]       + user["count_disliked_population"][i]       for i in range(4)]
     ocean_seen = [user["count_liked_ocean_distance"][i]   + user["count_disliked_ocean_distance"][i]   for i in range(3)]
     lat_seen   = [user["count_liked_abs_latitude"][i]     + user["count_disliked_abs_latitude"][i]     for i in range(3)]
 
-    # Alle Bins mit ihrer Abdeckung sammeln und nach aufsteigender Abdeckung sortieren
-    all_bins = (
-        [("cost",       i, cost_seen[i])  for i in range(4)] +
-        [("population", i, pop_seen[i])   for i in range(4)] +
-        [("ocean",      i, ocean_seen[i]) for i in range(3)] +
-        [("latitude",   i, lat_seen[i])   for i in range(3)]
-    )
-    all_bins.sort(key=lambda x: x[2])
+    # Alle noch nicht gesehenen Städte mit kombiniertem Score gewichten:
+    # Score = bin_priority (wie unterrepräsentiert sind die Bins dieser Stadt?)
+    #       × global_priority (wie selten wurde diese Stadt global angezeigt?)
+    # Das verhindert, dass Städte in kleinen Bins (z.B. nur 4 Städte über 60° Breite)
+    # überproportional häufig erscheinen, während Städte in großen Bins (80+ Megacities)
+    # kaum gezeigt werden.
+    available = []
+    weights   = []
+    for city in city_list:
+        if city[0] in seen:
+            continue
 
-    # Versuche eine Stadt aus dem am wenigsten abgedeckten Bin zu finden
-    for category, bin_idx, _ in all_bins:
-        candidates = []
-        for city in city_list:
-            if city[0] in seen:
-                continue
-            if category == "cost":
-                if city[4] == '' or categorise(cost_categories, city[4]) != bin_idx:
-                    continue
-            elif category == "population":
-                if categorise(population_categories, city[6]) != bin_idx:
-                    continue
-            elif category == "ocean":
-                if categorise(ocean_categories, city[7]) != bin_idx:
-                    continue
-            elif category == "latitude":
-                if categorise(latitude_categories, city[8]) != bin_idx:
-                    continue
-            candidates.append(city)
+        cost_idx  = categorise(cost_categories,       city[4]) if city[4] != '' else None
+        pop_idx   = categorise(population_categories, city[6])
+        ocean_idx = categorise(ocean_categories,      city[7])
+        lat_idx   = categorise(latitude_categories,   abs(float(city[8])))
 
-        if candidates:
-            return weighted_choice(candidates)
+        # Bin-Priorität: 1 / (coverage + 1) für jeden Bin, dann das Maximum nehmen.
+        # Das stellt Diversität sicher, ohne einzelne Städte aus winzigen Bins zu bevorzugen.
+        bin_scores = [
+            1.0 / (pop_seen[pop_idx]     + 1),
+            1.0 / (ocean_seen[ocean_idx] + 1),
+            1.0 / (lat_seen[lat_idx]     + 1),
+        ]
+        if cost_idx is not None:
+            bin_scores.append(1.0 / (cost_seen[cost_idx] + 1))
+        bin_priority = max(bin_scores)
 
-    # Fallback: gewichtet zufällig aus allen noch nicht gesehenen Städten
-    available = [city for city in city_list if city[0] not in seen]
-    return weighted_choice(available)
+        # Globale Priorität: Städte die seltener gezeigt wurden bekommen höheres Gewicht
+        global_count    = city_shown_counts.get(city[0], 0) if city_shown_counts else 0
+        global_priority = 1.0 / (global_count + 1)
+
+        available.append(city)
+        weights.append(bin_priority * global_priority)
+
+    if not available:
+        return None
+    return random.choices(available, weights=weights, k=1)[0]
 
 # Gibt für jede Stelle jeder Kategorie Wert zurück, wie sehr sie user gefällt
 def calculate_user_preference(user):
@@ -676,6 +673,24 @@ def _cosine_similarity(a, b):
     return dot / (mag_a * mag_b) if mag_a and mag_b else 0
 
 
+_SHARED_SENTENCES = {
+    ("population", "Kleinstadt"):   "Ihr mögt beide kleine, gemütliche Städte",
+    ("population", "Mittelgroß"):   "Ihr bevorzugt beide mittelgroße Städte",
+    ("population", "Großstadt"):    "Ihr liebt beide das Großstadtleben",
+    ("population", "Megacity"):     "Ihr liebt beide Megacities",
+    ("ocean", "Direkt am Meer"):    "Ihr seid beide gerne direkt am Meer",
+    ("ocean", "Küstennah"):         "Ihr mögt beide Städte in Küstennähe",
+    ("ocean", "Im Landesinneren"):  "Euch zieht es beide ins Landesinnere",
+    ("latitude", "Tropisch"):       "Ihr reist beide am liebsten in tropische Gefilde",
+    ("latitude", "Gemäßigt"):       "Ihr bevorzugt beide gemäßigte Klimazonen",
+    ("latitude", "Kühl & Polar"):   "Ihr liebt beide kühle, nordische Ziele",
+    ("cost", "Günstig"):            "Ihr reist beide gerne budgetfreundlich",
+    ("cost", "Erschwinglich"):      "Ihr achtet beide auf das Preis-Leistungs-Verhältnis",
+    ("cost", "Gehoben"):            "Ihr reist beide gerne auf gehobenem Niveau",
+    ("cost", "Luxuriös"):           "Ihr reist beide auf höchstem Niveau",
+}
+
+
 def find_travel_buddy(current_user, current_session_id, city_list, all_swipes):
     """Findet aus allen abgeschlossenen Sessions die ähnlichste.
     all_swipes: {session_id: [(iteration, city, country, continent, choice), ...]}
@@ -683,8 +698,20 @@ def find_travel_buddy(current_user, current_session_id, city_list, all_swipes):
     city_map  = {city[0]: city for city in city_list}
     my_vector = _preference_vector(current_user)
 
-    best_sim         = -1
+    # Meine Top-3 Städte vorausberechnen
+    my_prefs  = calculate_user_preference(current_user)
+    my_scored = score_all_cities(current_user, my_prefs, city_list)
+    seen      = set(current_user["liked_cities"] + current_user["disliked_cities"])
+    my_top3   = []
+    for _, city in my_scored:
+        if city[0] not in seen:
+            my_top3.append(city)
+            if len(my_top3) == 3:
+                break
+
+    best_sim        = -1
     best_personality = None
+    best_buddy_user  = None
     total_others     = 0
 
     for session_id, swipes in all_swipes.items():
@@ -709,14 +736,61 @@ def find_travel_buddy(current_user, current_session_id, city_list, all_swipes):
         if sim > best_sim:
             best_sim         = sim
             best_personality = get_personality_type(other_user)
+            best_buddy_user  = other_user
 
-    if total_others == 0 or best_personality is None:
+    if total_others == 0 or best_personality is None or best_buddy_user is None:
         return None
 
+    # Stadt aus meiner Top-3 finden, die beim Buddy am höchsten rankt
+    buddy_prefs  = calculate_user_preference(best_buddy_user)
+    buddy_scored = score_all_cities(best_buddy_user, buddy_prefs, city_list)
+    buddy_rank   = {city[0]: rank + 1 for rank, (_, city) in enumerate(buddy_scored)}
+    my_rank      = {city[0]: rank + 1 for rank, (_, city) in enumerate(my_scored)}
+    shared_city  = min(my_top3, key=lambda c: buddy_rank.get(c[0], len(city_list)))
+
+    # Stärkste gemeinsame Präferenzdimension finden
+    def dom(lst): return lst.index(max(lst)) if max(lst) > 0 else 0
+
+    dims = [
+        ("cost",       current_user["count_liked_cost"],            best_buddy_user["count_liked_cost"],            _COST_LABELS),
+        ("population", current_user["count_liked_population"],      best_buddy_user["count_liked_population"],      _POP_LABELS),
+        ("ocean",      current_user["count_liked_ocean_distance"],  best_buddy_user["count_liked_ocean_distance"],  _OCEAN_LABELS),
+        ("latitude",   current_user["count_liked_abs_latitude"],    best_buddy_user["count_liked_abs_latitude"],    _LAT_LABELS),
+    ]
+    shared_stat  = None
+    best_strength = -1
+    for dim_name, my_counts, buddy_counts, labels in dims:
+        my_d = dom(my_counts)
+        bu_d = dom(buddy_counts)
+        if my_d == bu_d:
+            strength = my_counts[my_d] + buddy_counts[bu_d]
+            if strength > best_strength:
+                best_strength = strength
+                shared_stat   = _SHARED_SENTENCES.get(
+                    (dim_name, labels[my_d]),
+                    f"Ihr teilt beide eine Vorliebe für {labels[my_d]}"
+                )
+
+    shared_city_my_rank    = my_rank.get(shared_city[0], 0) if shared_city else None
+    shared_city_buddy_rank = buddy_rank.get(shared_city[0], 0) if shared_city else None
+
+    buddy_seen = set(best_buddy_user["liked_cities"] + best_buddy_user["disliked_cities"])
+    buddy_top3 = []
+    for _, city in buddy_scored:
+        if city[0] not in buddy_seen:
+            buddy_top3.append(city)
+            if len(buddy_top3) == 3:
+                break
+
     return {
-        "match_pct":     round(best_sim * 100),
-        "total_players": total_others,
-        "personality":   best_personality,
+        "match_pct":              round(best_sim * 100),
+        "total_players":          total_others,
+        "personality":            best_personality,
+        "shared_city":            shared_city,
+        "shared_city_my_rank":    shared_city_my_rank,
+        "shared_city_buddy_rank": shared_city_buddy_rank,
+        "shared_stat":            shared_stat,
+        "buddy_top3":             buddy_top3,
     }
 
 

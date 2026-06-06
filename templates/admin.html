@@ -345,6 +345,110 @@
             padding-left: 2rem;
         }
 
+        /* ── Shown-counter table ── */
+        .shown-section {
+            padding: 0 2rem 2rem;
+        }
+        .shown-controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .shown-filter-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 0.3rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .shown-filter-btn.active, .shown-filter-btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .shown-search {
+            margin-left: auto;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.3rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            outline: none;
+            width: 180px;
+        }
+        .shown-search::placeholder { color: var(--muted); }
+        .shown-table-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .shown-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .shown-table th {
+            background: var(--surface2);
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent);
+            padding: 0.7rem 1rem;
+            text-align: left;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .shown-table th:hover { color: var(--text); }
+        .shown-table th .sort-arrow { margin-left: 4px; opacity: 0.4; }
+        .shown-table th.sorted .sort-arrow { opacity: 1; }
+        .shown-table td {
+            padding: 0.55rem 1rem;
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+        }
+        .shown-table tr:hover td { background: var(--surface2); }
+        .shown-table .td-rank { color: var(--muted); font-size: 0.75rem; width: 36px; }
+        .shown-table .td-city { font-weight: 600; }
+        .shown-table .td-country { color: var(--muted); font-size: 0.78rem; }
+        .shown-table .td-count { text-align: right; font-weight: 700; }
+        .count-zero { color: var(--dislike); }
+        .count-low  { color: #ffc107; }
+        .count-ok   { color: var(--like); }
+        .shown-table .td-bar { width: 120px; padding-right: 1.25rem; }
+        .shown-bar-track {
+            height: 6px;
+            background: var(--surface2);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+        .shown-bar-fill {
+            height: 100%;
+            border-radius: 99px;
+            background: var(--accent);
+        }
+        .shown-summary {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .shown-summary-chip {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0.6rem 1rem;
+            font-size: 0.8rem;
+        }
+        .shown-summary-chip strong { color: var(--accent); font-size: 1.1rem; display: block; }
+
         /* ── Empty state ── */
         .empty-state {
             text-align: center;
@@ -428,6 +532,61 @@
             {% endfor %}
         </div>
 
+    </div>
+</div>
+{% endif %}
+
+{% if city_shown_list %}
+{% set never_shown = city_shown_list | selectattr("count", "eq", 0) | list | length %}
+{% set max_shown = city_shown_list | map(attribute="count") | max %}
+<div class="shown-section">
+    <div class="section-heading">Städte-Anzeigehäufigkeit (Swipes)</div>
+
+    <div class="shown-summary">
+        <div class="shown-summary-chip"><strong>{{ city_shown_list | length }}</strong> Städte gesamt</div>
+        <div class="shown-summary-chip"><strong style="color:var(--dislike)">{{ never_shown }}</strong> Noch nie gezeigt</div>
+        <div class="shown-summary-chip"><strong>{{ city_shown_list | length - never_shown }}</strong> Mindestens 1× gezeigt</div>
+        <div class="shown-summary-chip"><strong>{{ max_shown }}</strong> Max. Anzeigen (eine Stadt)</div>
+    </div>
+
+    <div class="shown-controls">
+        <button class="shown-filter-btn active" onclick="filterShown('all', this)">Alle</button>
+        <button class="shown-filter-btn" onclick="filterShown('zero', this)">Noch nie gezeigt</button>
+        <button class="shown-filter-btn" onclick="filterShown('low', this)">Selten (≤3×)</button>
+        <input class="shown-search" type="text" placeholder="Stadt suchen…" oninput="searchShown(this.value)">
+    </div>
+
+    <div class="shown-table-wrap">
+        <table class="shown-table" id="shownTable">
+            <thead>
+                <tr>
+                    <th class="td-rank" onclick="sortShown('rank')"># <span class="sort-arrow">↕</span></th>
+                    <th onclick="sortShown('city')">Stadt <span class="sort-arrow">↕</span></th>
+                    <th onclick="sortShown('country')">Land <span class="sort-arrow">↕</span></th>
+                    <th class="td-bar"></th>
+                    <th onclick="sortShown('count')" class="sorted" style="text-align:right">Angezeigt <span class="sort-arrow">↑</span></th>
+                </tr>
+            </thead>
+            <tbody id="shownBody">
+                {% for item in city_shown_list %}
+                <tr data-city="{{ item.city | lower }}" data-country="{{ item.country | lower }}" data-count="{{ item.count }}">
+                    <td class="td-rank">{{ loop.index }}</td>
+                    <td class="td-city">{{ item.city }}</td>
+                    <td class="td-country">{{ item.country }}</td>
+                    <td class="td-bar">
+                        <div class="shown-bar-track">
+                            <div class="shown-bar-fill" style="width:{{ ((item.count / max_shown * 100) if max_shown > 0 else 0)|int }}%"></div>
+                        </div>
+                    </td>
+                    <td class="td-count">
+                        <span class="{{ 'count-zero' if item.count == 0 else ('count-low' if item.count <= 3 else 'count-ok') }}">
+                            {{ item.count }}×
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 {% endif %}
@@ -540,11 +699,92 @@
 function toggle(id) {
     document.getElementById(id).classList.toggle('open');
 }
-// Erste Session direkt aufklappen
 document.addEventListener('DOMContentLoaded', () => {
     const first = document.querySelector('.session-card');
     if (first) first.classList.add('open');
 });
+
+// ── Städte-Anzeige-Tabelle ──
+let shownSortCol = 'count';
+let shownSortAsc = true;
+let shownFilter  = 'all';
+let shownSearch  = '';
+
+function getShownRows() {
+    return Array.from(document.querySelectorAll('#shownBody tr'));
+}
+
+function applyShown() {
+    const rows = getShownRows();
+    rows.forEach(r => {
+        const count   = parseInt(r.dataset.count);
+        const city    = r.dataset.city;
+        const country = r.dataset.country;
+        const matchFilter =
+            shownFilter === 'all'  ? true :
+            shownFilter === 'zero' ? count === 0 :
+            shownFilter === 'low'  ? count <= 3 : true;
+        const matchSearch = shownSearch === '' ||
+            city.includes(shownSearch) || country.includes(shownSearch);
+        r.style.display = (matchFilter && matchSearch) ? '' : 'none';
+    });
+
+    // Sortierung
+    const tbody = document.getElementById('shownBody');
+    const visible = rows.filter(r => r.style.display !== 'none');
+    visible.sort((a, b) => {
+        let va, vb;
+        if (shownSortCol === 'count') {
+            va = parseInt(a.dataset.count);
+            vb = parseInt(b.dataset.count);
+        } else if (shownSortCol === 'city') {
+            va = a.dataset.city; vb = b.dataset.city;
+        } else if (shownSortCol === 'country') {
+            va = a.dataset.country; vb = b.dataset.country;
+        } else {
+            va = parseInt(a.querySelector('.td-rank').textContent);
+            vb = parseInt(b.querySelector('.td-rank').textContent);
+        }
+        if (va < vb) return shownSortAsc ? -1 : 1;
+        if (va > vb) return shownSortAsc ?  1 : -1;
+        return 0;
+    });
+    visible.forEach(r => tbody.appendChild(r));
+}
+
+function sortShown(col) {
+    if (shownSortCol === col) {
+        shownSortAsc = !shownSortAsc;
+    } else {
+        shownSortCol = col;
+        shownSortAsc = col === 'count';
+    }
+    // Pfeil-Indikator aktualisieren
+    document.querySelectorAll('#shownTable th').forEach(th => {
+        th.classList.remove('sorted');
+        th.querySelector('.sort-arrow').textContent = '↕';
+    });
+    const headers = document.querySelectorAll('#shownTable th');
+    const colMap = {rank: 0, city: 1, country: 2, count: 4};
+    const th = headers[colMap[col]];
+    if (th) {
+        th.classList.add('sorted');
+        th.querySelector('.sort-arrow').textContent = shownSortAsc ? '↑' : '↓';
+    }
+    applyShown();
+}
+
+function filterShown(type, btn) {
+    shownFilter = type;
+    document.querySelectorAll('.shown-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyShown();
+}
+
+function searchShown(val) {
+    shownSearch = val.toLowerCase();
+    applyShown();
+}
 </script>
 </body>
 </html>
