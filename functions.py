@@ -1,6 +1,30 @@
 import csv
 import random
 
+
+def new_user():
+    """Leeres Nutzerprofil für Likes/Dislikes."""
+    return {
+        "liked_cities": [], "liked_countries": [], "liked_continents": [],
+        "count_liked_cost": [0, 0, 0, 0], "count_liked_population": [0, 0, 0, 0],
+        "count_liked_ocean_distance": [0, 0, 0], "count_liked_abs_latitude": [0, 0, 0],
+        "disliked_cities": [], "disliked_countries": [], "disliked_continents": [],
+        "count_disliked_cost": [0, 0, 0, 0], "count_disliked_population": [0, 0, 0, 0],
+        "count_disliked_ocean_distance": [0, 0, 0], "count_disliked_abs_latitude": [0, 0, 0],
+    }
+
+
+def build_user_from_swipes(swipes, city_map):
+    """Rekonstruiert ein Nutzerprofil aus gespeicherten Swipes.
+    swipes: Liste von (iteration, city, country, continent, choice)."""
+    user = new_user()
+    for _, city_name, _, _, choice in swipes:
+        city_data = city_map.get(city_name)
+        if city_data:
+            scoring(city_data, user, choice == "like")
+    return user
+
+
 PERSONALITY_TYPES = {
     "metropolen_fan": {
         "name": "Der Metropolen-Fan",
@@ -105,7 +129,8 @@ def _best_key(user):
     scores = _personality_scores(user)
     if any(v > 0 for v in scores.values()):
         return max(scores, key=scores.get)
-    return max(_fallback_scores(user), key=_fallback_scores(user).get)
+    fallback = _fallback_scores(user)
+    return max(fallback, key=fallback.get)
 
 
 def get_personality_type(user):
@@ -126,8 +151,8 @@ def get_todo_activities(user, cities):
     continent      = top[2] if len(top) > 2 else ""
     country        = top[1] if len(top) > 1 else ""
     cost_raw       = top[4] if len(top) > 4 and top[4] != '' else "40"
-    population_raw = top[6] if len(top) > 6 else "500000"
-    ocean_raw      = top[7] if len(top) > 7 else "100"
+    population_raw = top[6] if len(top) > 6 and top[6] != '' else "500000"
+    ocean_raw      = top[7] if len(top) > 7 and top[7] != '' else "100"
 
     cost_cat  = categorise([20, 40, 60],              float(cost_raw))
     pop_cat   = categorise([100000, 500000, 1700000], float(population_raw))
@@ -214,7 +239,7 @@ def _get_global_bin_distributions(liked_cities, city_list):
             g_cost[categorise(cost_cats, city[4])] += 1
         g_pop[categorise(pop_cats, city[6])] += 1
         g_ocean[categorise(ocean_cats, city[7])] += 1
-        g_lat[categorise(lat_cats, city[8])] += 1
+        g_lat[categorise(lat_cats, abs(float(city[8])))] += 1
 
     def to_pct(lst):
         total = sum(lst)
@@ -285,18 +310,18 @@ def scoring(city, user, result):
     city_german = city[0]
     country_german = city[1]
     continent_german = city[2]
-    city_ranking = city[3]
     city_cost = city[4]
     city_population = city[6]
     city_ocean_distance = city[7]
-    city_lat = city[8]
+    # abs(): Südhalbkugel-Städte (z.B. Sydney, -33.9°) gehören in dieselbe
+    # Klimazone wie Städte auf gleicher nördlicher Breite
+    city_lat = abs(float(city[8]))
 
     # Wenn geliked, dann den likes hinzufügen
     if result:
         user["liked_cities"].append(city_german)
         user["liked_countries"].append(country_german)
         user["liked_continents"].append(continent_german)
-        user["liked_rankings"].append(city_ranking)
         user["count_liked_population"][categorise(population_categories, city_population)] += 1
         user["count_liked_ocean_distance"][categorise(ocean_distance_categories, city_ocean_distance)] += 1
         user["count_liked_abs_latitude"][categorise(abs_latitude_categories, city_lat)] += 1
@@ -308,7 +333,6 @@ def scoring(city, user, result):
         user["disliked_cities"].append(city_german)
         user["disliked_countries"].append(country_german)
         user["disliked_continents"].append(continent_german)
-        user["disliked_rankings"].append(city_ranking)
         user["count_disliked_population"][categorise(population_categories, city_population)] += 1
         user["count_disliked_ocean_distance"][categorise(ocean_distance_categories, city_ocean_distance)] += 1
         user["count_disliked_abs_latitude"][categorise(abs_latitude_categories, city_lat)] += 1
@@ -324,19 +348,6 @@ def categorise(categories, value):
             return i
         i += 1
     return i
-
-def standard_deviation(data):
-    if not data:
-        return 0
-    # Erwartungswert
-    exp = 0
-    #Varianz
-    var = 0
-    for i in data:
-        exp += i / len(data)
-    for i in data:
-        var += ((i - exp) ** 2) * (1 / len(data))
-    return var ** 0.5
 
 # Nächste Stadt aus csv holen – bevorzugt Städte aus wenig gesehenen Kategorien
 # und gewichtet nach inverser globaler Zeig-Häufigkeit für ausgeglichene Abdeckung
@@ -399,16 +410,12 @@ def get_next_city(user, city_list, extra_seen=None, city_shown_counts=None):
 def calculate_user_preference(user):
     user_preferences = {
         "cost": [0, 0, 0, 0],
-        "sd_cost": 0,
         "weight_cost": 1,
         "population": [0, 0, 0, 0],
-        "sd_population": 0,
         "weight_population": 1,
         "ocean_distance": [0, 0, 0],
-        "sd_ocean_distance": 0,
         "weight_ocean_distance": 1,
         "latitude": [0, 0, 0],
-        "sd_latitude": 0,
         "weight_latitude": 1,
     }
 
@@ -420,12 +427,6 @@ def calculate_user_preference(user):
         user_preferences["ocean_distance"][i] = user["count_liked_ocean_distance"][i] - user["count_disliked_ocean_distance"][i]
     for i in range(3):
         user_preferences["latitude"][i] = user["count_liked_abs_latitude"][i] - user["count_disliked_abs_latitude"][i]
-
-    # SD bleibt für die Anzeige der Präferenzbalken
-    user_preferences["sd_cost"] = standard_deviation(user_preferences["cost"])
-    user_preferences["sd_population"] = standard_deviation(user_preferences["population"])
-    user_preferences["sd_ocean_distance"] = standard_deviation(user_preferences["ocean_distance"])
-    user_preferences["sd_latitude"] = standard_deviation(user_preferences["latitude"])
 
     # Max-Abs als Scoring-Gewicht: funktioniert auch wenn der Nutzer konsequent eine Kategorie bevorzugt
     user_preferences["weight_cost"] = max(abs(x) for x in user_preferences["cost"]) or 1
@@ -582,7 +583,7 @@ def score_all_cities(user, user_preferences, city_list):
             score += user_preferences["weight_cost"] * user_preferences["cost"][categorise(cost_cats, city[4])]
         score += user_preferences["weight_population"]     * user_preferences["population"][categorise(pop_cats, city[6])]
         score += user_preferences["weight_ocean_distance"] * user_preferences["ocean_distance"][categorise(ocean_cats, city[7])]
-        score += user_preferences["weight_latitude"]       * user_preferences["latitude"][categorise(lat_cats, city[8])]
+        score += user_preferences["weight_latitude"]       * user_preferences["latitude"][categorise(lat_cats, abs(float(city[8])))]
         scored.append((score, city))
 
     scored.sort(key=lambda x: (x[0], -float(x[1][3]) if x[1][3] != '' else 0), reverse=True)
@@ -629,7 +630,7 @@ def calculate_city_score(user, user_preferences, city_list):
 
         score += user_preferences["weight_population"] * user_preferences["population"][categorise(population_categories, city[6])]
         score += user_preferences["weight_ocean_distance"] * user_preferences["ocean_distance"][categorise(ocean_distance_categories, city[7])]
-        score += user_preferences["weight_latitude"] * user_preferences["latitude"][categorise(abs_latitude_categories, city[8])]
+        score += user_preferences["weight_latitude"] * user_preferences["latitude"][categorise(abs_latitude_categories, abs(float(city[8])))]
 
         # Speichern als Tupel, um später nach dem Score sortieren zu können
         scored_cities.append((score, city))
@@ -642,51 +643,15 @@ def calculate_city_score(user, user_preferences, city_list):
 
     top_3_cities = []
     used_descriptions = set() # Speicher für bereits genutzte Satzbausteine
-    
+
     for item in scored_cities[:3]:
-        city_data = list(item[1]) 
+        city_data = list(item[1])
         # Wir geben das Set an die Funktion weiter
         description = get_city_description(city_data, used_descriptions)
-        city_data.append(description) 
+        city_data.append(description)
         top_3_cities.append(city_data)
 
-    # Analyse am Ende
-    standard_deviations = {
-        "cost" :user_preferences["sd_cost"], 
-        "population": user_preferences["sd_population"], 
-        "ocean_distance": user_preferences["sd_ocean_distance"], 
-        "latitude": user_preferences["sd_latitude"]
-    }
-    sorted_sd = dict(sorted(
-        standard_deviations.items(), 
-        key=lambda item: item[1], 
-        reverse=True))
-    
-    # Finde den maximalen SD-Wert für die Skalierung (Vermeidung von Division durch Null)
-    max_sd = max(standard_deviations.values()) if any(standard_deviations.values()) else 1
-
-    # Erstelle ein Dictionary mit lesbaren Namen und berechneten Prozentwerten
-    display_sd = []
-    
-    # Mapping für deutsche Labels und Texte
-    labels = {
-        "cost": {"title": "Lebenskosten", "desc": "Wie viel Geld du in der Stadt ausgeben möchtest."},
-        "population": {"title": "Stadtgröße", "desc": "Ob du dich in Megacities oder Kleinstädten wohl fühlst."},
-        "ocean_distance": {"title": "Meeresnähe", "desc": "Die Distanz zum nächsten Strand oder Ozean."},
-        "latitude": {"title": "Klimazone", "desc": "In welchem Klima du dich besonders wohl fühlst."}
-    }
-
-    for key, value in sorted_sd.items():
-        percentage = (value / max_sd) * 100
-        display_sd.append({
-            "key": key,
-            "title": labels[key]["title"],
-            "desc": labels[key]["desc"],
-            "value": round(percentage),
-        })
-
-    print(top_3_cities)
-    return top_3_cities, display_sd, scored_cities
+    return top_3_cities, scored_cities
 
 
 def _preference_vector(user):
@@ -757,18 +722,7 @@ def find_travel_buddy(current_user, current_session_id, city_list, all_swipes):
             continue
         total_others += 1
 
-        other_user = {
-            "liked_rankings": [], "liked_cities": [], "liked_countries": [], "liked_continents": [],
-            "count_liked_cost": [0,0,0,0], "count_liked_population": [0,0,0,0],
-            "count_liked_ocean_distance": [0,0,0], "count_liked_abs_latitude": [0,0,0],
-            "disliked_rankings": [], "disliked_cities": [], "disliked_countries": [], "disliked_continents": [],
-            "count_disliked_cost": [0,0,0,0], "count_disliked_population": [0,0,0,0],
-            "count_disliked_ocean_distance": [0,0,0], "count_disliked_abs_latitude": [0,0,0],
-        }
-        for _, city_name, _, _, choice in swipes:
-            city_data = city_map.get(city_name)
-            if city_data:
-                scoring(city_data, other_user, choice == "like")
+        other_user = build_user_from_swipes(swipes, city_map)
 
         sim = _cosine_similarity(my_vector, _preference_vector(other_user))
         if sim > best_sim:

@@ -62,7 +62,7 @@
         </div>
 
         <!-- Seltenheits-Vergleich -->
-        {% if rarity and rarity.total_sessions > 1 %}
+        {% if rarity %}
         <div class="rarity-section">
             <div class="rarity-top">
                 <div>
@@ -139,7 +139,7 @@
                     </div>
                     <div class="buddy-header-text">
                         {% if travel_buddy.shared_stat %}
-                        <p class="buddy-shared-stat">✓ {{ travel_buddy.shared_stat }}</p>
+                        <!-- <p class="buddy-shared-stat">✓ {{ travel_buddy.shared_stat }}</p> -->
                         {% endif %}
                     </div>
                 </div>
@@ -591,3 +591,6 @@
         }
     </script>
     {% endif %}
+
+</body>
+</html>

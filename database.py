@@ -1,8 +1,8 @@
 import sqlite3
 import uuid
 import datetime
+import os
 import random
-import string
 
 _CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # kein O/I/0/1 (Verwechslungsgefahr)
 
@@ -14,7 +14,8 @@ def _generate_short_code(cur):
             return code
     raise RuntimeError("Kein freier short_code gefunden")
 
-DB_PATH = "database.db"
+# Absoluter Pfad, damit die DB unabhängig vom Startverzeichnis gefunden wird
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "database.db")
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -208,30 +209,31 @@ def get_all_sessions_overview():
     cur.execute("SELECT id, created_at, completed FROM sessions ORDER BY created_at DESC")
     sessions = cur.fetchall()
 
-    overview = []
-    for sid, created_at, completed in sessions:
-        cur.execute(
-            "SELECT iteration, city, country, continent, choice FROM swipes WHERE session_id = ? ORDER BY iteration",
-            (sid,)
+    # Alle Swipes/Results in je einem Query laden statt zwei Queries pro Session
+    cur.execute("SELECT session_id, iteration, city, country, continent, choice FROM swipes ORDER BY iteration")
+    swipes_by_session = {}
+    for sid, iteration, city, country, continent, choice in cur.fetchall():
+        swipes_by_session.setdefault(sid, []).append(
+            {"iteration": iteration, "city": city, "country": country, "continent": continent, "choice": choice}
         )
-        swipes = cur.fetchall()
 
-        cur.execute(
-            "SELECT rank, city, country, score FROM results WHERE session_id = ? ORDER BY rank",
-            (sid,)
-        )
-        results = cur.fetchall()
-
-        overview.append({
-            "id": sid,
-            "created_at": created_at,
-            "completed": bool(completed),
-            "swipes": [{"iteration": r[0], "city": r[1], "country": r[2], "continent": r[3], "choice": r[4]} for r in swipes],
-            "results": [{"rank": r[0], "city": r[1], "country": r[2], "score": r[3]} for r in results],
-        })
+    cur.execute("SELECT session_id, rank, city, country, score FROM results ORDER BY rank")
+    results_by_session = {}
+    for sid, rank, city, country, score in cur.fetchall():
+        rows = results_by_session.setdefault(sid, [])
+        # Duplikate pro Rang ignorieren (Altlasten aus mehrfach gespeicherten Ergebnissen)
+        if not any(r["rank"] == rank for r in rows):
+            rows.append({"rank": rank, "city": city, "country": country, "score": score})
 
     con.close()
-    return overview
+
+    return [{
+        "id": sid,
+        "created_at": created_at,
+        "completed": bool(completed),
+        "swipes": swipes_by_session.get(sid, []),
+        "results": results_by_session.get(sid, []),
+    } for sid, created_at, completed in sessions]
 
 
 def get_swipes_for_session(session_id):
@@ -246,51 +248,48 @@ def get_swipes_for_session(session_id):
     return rows
 
 
-def get_all_liked_cities():
-    """Gibt alle gelikten Städtenamen aus abgeschlossenen Sessions zurück."""
+def get_all_liked_cities(exclude_session_id=None):
+    """Gibt alle gelikten Städtenamen aus abgeschlossenen Sessions zurück.
+    Mit exclude_session_id wird die eigene Session aus dem Vergleich ausgeschlossen."""
     con = get_connection()
     cur = con.cursor()
-    cur.execute("""
+    query = """
         SELECT sw.city FROM swipes sw
         JOIN sessions s ON sw.session_id = s.id
         WHERE sw.choice = 'like' AND s.completed = 1
-    """)
+    """
+    params = []
+    if exclude_session_id:
+        query += " AND sw.session_id != ?"
+        params.append(exclude_session_id)
+    cur.execute(query, params)
     rows = cur.fetchall()
     con.close()
     return [row[0] for row in rows]
 
 
-def get_global_stats():
+def get_completed_session_count(exclude_session_id=None):
+    """Anzahl abgeschlossener Sessions, optional ohne die eigene."""
     con = get_connection()
     cur = con.cursor()
-
-    cur.execute("SELECT COUNT(*) FROM sessions WHERE completed = 1")
+    query = "SELECT COUNT(*) FROM sessions WHERE completed = 1"
+    params = []
+    if exclude_session_id:
+        query += " AND id != ?"
+        params.append(exclude_session_id)
+    cur.execute(query, params)
     total = cur.fetchone()[0]
-
-    cur.execute("""
-        SELECT sw.continent, COUNT(*)
-        FROM swipes sw
-        JOIN sessions s ON sw.session_id = s.id
-        WHERE sw.choice = 'like' AND s.completed = 1
-        GROUP BY sw.continent
-    """)
-    continent_likes = {row[0]: row[1] for row in cur.fetchall()}
-
-    cur.execute("""
-        SELECT r.city, COUNT(*)
-        FROM results r
-        JOIN sessions s ON r.session_id = s.id
-        WHERE r.rank = 1 AND s.completed = 1
-        GROUP BY r.city
-    """)
-    top_city_counts = {row[0]: row[1] for row in cur.fetchall()}
-
     con.close()
-    return {
-        "total_sessions": total,
-        "continent_likes": continent_likes,
-        "top_city_counts": top_city_counts,
-    }
+    return total
+
+
+def is_session_completed(session_id):
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("SELECT completed FROM sessions WHERE id = ?", (session_id,))
+    row = cur.fetchone()
+    con.close()
+    return bool(row and row[0])
 
 
 def get_city_shown_counts():
@@ -391,6 +390,7 @@ def delete_all_sessions():
     cur.execute("DELETE FROM swipes")
     cur.execute("DELETE FROM results")
     cur.execute("DELETE FROM sessions")
+    cur.execute("DELETE FROM city_global_stats")
     con.commit()
     con.close()
 

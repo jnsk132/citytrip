@@ -1,26 +1,28 @@
-from flask import Flask, render_template, redirect, request, session, jsonify
-from flask_session import Session
-from functions import *  # includes get_todo_activities
-from database import init_db, create_session, save_swipe, save_result, complete_session, get_results, print_session_overview, get_all_sessions_overview, get_global_stats, get_all_liked_cities, get_swipes_for_session, get_session_id_by_code, get_short_code, get_city_result_stats, get_city_shown_counts, update_city_global_stats, get_city_avg_ranks, get_all_completed_swipes, delete_session, delete_all_sessions
-
-def _build_user_from_swipes(swipes, city_map):
-    user = {
-        "liked_rankings": [], "liked_cities": [], "liked_countries": [], "liked_continents": [],
-        "count_liked_cost": [0,0,0,0], "count_liked_population": [0,0,0,0],
-        "count_liked_ocean_distance": [0,0,0], "count_liked_abs_latitude": [0,0,0],
-        "disliked_rankings": [], "disliked_cities": [], "disliked_countries": [], "disliked_continents": [],
-        "count_disliked_cost": [0,0,0,0], "count_disliked_population": [0,0,0,0],
-        "count_disliked_ocean_distance": [0,0,0], "count_disliked_abs_latitude": [0,0,0],
-    }
-    for _, city_name, _, _, choice in swipes:
-        city_data = city_map.get(city_name)
-        if city_data:
-            scoring(city_data, user, choice == "like")
-    return user
-import csv
-import qrcode
 import base64
+import csv
+import os
+from functools import wraps
 from io import BytesIO
+
+import qrcode
+from flask import Flask, Response, jsonify, redirect, render_template, request, session
+from flask_session import Session
+
+from functions import *
+from database import (
+    init_db, create_session, save_swipe, save_result, complete_session,
+    get_results, print_session_overview, get_all_sessions_overview,
+    get_completed_session_count, get_all_liked_cities, get_swipes_for_session,
+    get_session_id_by_code, get_short_code, get_city_result_stats,
+    get_city_shown_counts, update_city_global_stats, get_city_avg_ranks,
+    get_all_completed_swipes, delete_session, delete_all_sessions,
+    is_session_completed,
+)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Passwort für /admin – für die Messe per Umgebungsvariable setzen!
+ADMIN_PASSWORD = os.environ.get("CITYTRIP_ADMIN_PASSWORD", "citytrip2026")
 
 app = Flask(__name__)
 init_db()
@@ -30,8 +32,9 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-# CSV Einmalig laden
-with open("static/worldcities_ranked_german.csv", mode="r", encoding="utf-8") as file:
+# CSV Einmalig laden (absoluter Pfad, unabhängig vom Startverzeichnis)
+with open(os.path.join(BASE_DIR, "static", "worldcities_ranked_german.csv"),
+          mode="r", encoding="utf-8") as file:
     reader = csv.reader(file)
     header = next(reader)
     city_list = list(reader)
@@ -40,59 +43,38 @@ with open("static/worldcities_ranked_german.csv", mode="r", encoding="utf-8") as
 city_shown_counts = get_city_shown_counts()
 
 
+def require_admin(f):
+    """HTTP Basic Auth für die Admin-Seiten (Nutzername egal, nur Passwort zählt)."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        auth = request.authorization
+        if not auth or auth.password != ADMIN_PASSWORD:
+            return Response("Login erforderlich", 401,
+                            {"WWW-Authenticate": 'Basic realm="CityTrip Admin"'})
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def _ensure_db_session():
+    """DB-Session erst beim Quiz-Start anlegen – ein Refresh der Startseite
+    soll keine Karteileichen in der Datenbank erzeugen."""
+    if not session.get("session_id"):
+        session_id, short_code = create_session()
+        session["session_id"] = session_id
+        session["short_code"] = short_code
+
+
 @app.route("/")
 def index():
     # Session für neuen Besucher initialisieren
-
     session["iteration"] = 0
     session["current_city_data"] = None
-    session_id, short_code = create_session()
-    session["session_id"] = session_id
-    session["short_code"] = short_code
-
-    session["user"] = {
-        # Likes
-        "liked_rankings": [],
-        "liked_cities": [],
-        "liked_countries": [],
-        "liked_continents": [],
-        "count_liked_cost": [0, 0, 0, 0],
-        "count_liked_population": [0, 0, 0, 0],
-        "count_liked_ocean_distance": [0, 0, 0],
-        "count_liked_abs_latitude": [0, 0, 0],
-
-        # Dislikes
-        "disliked_rankings": [],
-        "disliked_cities": [],
-        "disliked_countries": [],
-        "disliked_continents": [],
-        "count_disliked_cost": [0, 0, 0, 0],
-        "count_disliked_population": [0, 0, 0, 0],
-        "count_disliked_ocean_distance": [0, 0, 0],
-        "count_disliked_abs_latitude": [0, 0, 0],
-    }
+    session["next_city_data"] = None
+    session["session_id"] = None
+    session["short_code"] = None
+    session["user"] = new_user()
 
     return render_template("index.html")
-
-
-@app.route("/quiz/init")
-def quiz_init():
-    if "user" not in session:
-        return jsonify({"error": "no session"}), 401
-    user = session["user"]
-    session["iteration"] = 1
-    city_row = get_next_city(user, city_list, city_shown_counts=city_shown_counts)
-    session["current_city_data"] = city_row
-    # Stadt N+1 vorausberechnen und in Session festschreiben
-    next_row = get_next_city(user, city_list, extra_seen={city_row[0]}, city_shown_counts=city_shown_counts)
-    session["next_city_data"] = next_row
-    return jsonify({
-        "city_name": city_row[0],
-        "country_name": city_row[1],
-        "file_path": f"static/Alle_Stadt_Bilder_neu/{city_row[11]}.jpg",
-        "iteration": 1,
-        "prefetch_path": f"static/Alle_Stadt_Bilder_neu/{next_row[11]}.jpg",
-    })
 
 
 @app.route("/quiz")
@@ -104,94 +86,48 @@ def quiz():
     current_city_data = session.get("current_city_data")
     choice = request.args.get('choice')
 
-    if choice:
-        # Normale Navigation mit Antwort
+    if choice in ("like", "dislike"):
+        # Fallback-Navigation (z.B. bei Netzwerkfehler im fetch)
+        _ensure_db_session()
         session["iteration"] += 1
 
         if current_city_data is not None:
             scoring(current_city_data, user, choice == "like")
             session["user"] = user
+            save_swipe(
+                session_id=session["session_id"],
+                iteration=session["iteration"] - 1,
+                city=current_city_data[0],
+                country=current_city_data[1],
+                continent=current_city_data[2],
+                choice=choice
+            )
 
         if session["iteration"] > 20:
             return redirect("/results")
 
         city_row = get_next_city(user, city_list, city_shown_counts=city_shown_counts)
         session["current_city_data"] = city_row
+        # Prefetch-Kette neu aufsetzen, damit /quiz/next keine veraltete Stadt liefert
+        session["next_city_data"] = get_next_city(user, city_list, extra_seen={city_row[0]},
+                                                  city_shown_counts=city_shown_counts)
     elif current_city_data is not None and session.get("iteration", 0) > 0:
         # Seite neu geladen – aktuelle Stadt aus Session wiederverwenden
         city_row = current_city_data
     else:
         # Erster Aufruf
+        _ensure_db_session()
         session["iteration"] = 1
         city_row = get_next_city(user, city_list, city_shown_counts=city_shown_counts)
         session["current_city_data"] = city_row
+        session["next_city_data"] = get_next_city(user, city_list, extra_seen={city_row[0]},
+                                                  city_shown_counts=city_shown_counts)
 
     return render_template("file.html",
                            city_name=city_row[0],
                            country_name=city_row[1],
                            file_path=f"static/Alle_Stadt_Bilder_neu/{city_row[11]}.jpg",
                            iteration=session["iteration"])
-
-
-@app.route("/results")
-def results():
-    # Prüfen ob Session existiert
-    if "user" not in session:
-        return redirect("/")
-
-    user = session["user"]
-
-    user_preferences = calculate_user_preference(user)
-    cities, sd, all_cities = calculate_city_score(user, user_preferences, city_list)
-
-    session_id = session["session_id"]
-
-    for rank, item in enumerate(cities, start=1):
-        save_result(
-            session_id=session_id,
-            rank=rank,
-            city=item[0],
-            country=item[1],
-            score=all_cities[rank - 1][0]
-        )
-    complete_session(session_id)
-    print_session_overview(session_id)
-    global city_shown_counts
-    city_shown_counts = get_city_shown_counts()
-
-    # Vollständige Rangliste (inkl. gesehene Städte) für globale Stats speichern
-    full_scored = score_all_cities(user, user_preferences, city_list)
-    update_city_global_stats(full_scored)
-
-    result_url = f"{request.host_url}results/{session_id}"
-    img = qrcode.make(result_url)
-
-    buffered = BytesIO()
-    img.save(buffered, format="JPEG")
-    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-    personality = get_personality_type(user)
-
-    global_stats = get_global_stats()
-    rarity = None
-    if global_stats["total_sessions"] > 1:
-        liked_cities_global = get_all_liked_cities()
-        rarity = calculate_rarity(user, city_list, liked_cities_global)
-        rarity["total_sessions"] = global_stats["total_sessions"]
-
-    city_avg_ranks = get_city_avg_ranks()
-    hidden_gem = find_hidden_gem(user, full_scored, city_avg_ranks)
-
-    all_swipes   = get_all_completed_swipes()
-    travel_buddy = find_travel_buddy(user, session_id, city_list, all_swipes)
-
-    todo_activities = get_todo_activities(user, cities)
-
-    return render_template("results.html", cities=cities, sd=sd, img_b64=img_str,
-                           personality=personality, rarity=rarity,
-                           session_id=session_id, short_code=session.get("short_code"),
-                           hidden_gem=hidden_gem, todo_activities=todo_activities,
-                           travel_buddy=travel_buddy)
 
 
 @app.route("/quiz/next", methods=["POST"])
@@ -201,23 +137,33 @@ def quiz_next():
 
     user = session["user"]
     current_city_data = session.get("current_city_data")
+    if current_city_data is None:
+        return jsonify({"redirect": "/"})
 
-    data = request.get_json()
+    data = request.get_json(silent=True)
     choice = data.get("choice") if data else None
 
-    session["iteration"] += 1
+    if choice not in ("like", "dislike"):
+        # Ungültige Anfrage – aktuelle Stadt erneut ausliefern, Fortschritt unverändert
+        return jsonify({
+            "city_name": current_city_data[0],
+            "country_name": current_city_data[1],
+            "file_path": f"static/Alle_Stadt_Bilder_neu/{current_city_data[11]}.jpg",
+            "iteration": session.get("iteration", 1),
+        })
 
-    if current_city_data is not None and choice:
-        scoring(current_city_data, user, choice == "like")
-        session["user"] = user
-        save_swipe(
-            session_id=session["session_id"],
-            iteration=session["iteration"] - 1,
-            city=current_city_data[0],
-            country=current_city_data[1],
-            continent=current_city_data[2],
-            choice=choice
-        )
+    _ensure_db_session()
+    scoring(current_city_data, user, choice == "like")
+    session["user"] = user
+    save_swipe(
+        session_id=session["session_id"],
+        iteration=session["iteration"],
+        city=current_city_data[0],
+        country=current_city_data[1],
+        continent=current_city_data[2],
+        choice=choice
+    )
+    session["iteration"] += 1
 
     if session["iteration"] > 20:
         return jsonify({"redirect": "/results"})
@@ -235,8 +181,74 @@ def quiz_next():
         "country_name": city_row[1],
         "file_path": f"static/Alle_Stadt_Bilder_neu/{city_row[11]}.jpg",
         "iteration": session["iteration"],
-        "prefetch_path": f"static/Alle_Stadt_Bilder_neu/{new_next[11]}.jpg",
+        "prefetch_path": f"static/Alle_Stadt_Bilder_neu/{new_next[11]}.jpg" if new_next else None,
     })
+
+
+@app.route("/results")
+def results():
+    # Prüfen ob Session existiert
+    if "user" not in session or not session.get("session_id"):
+        return redirect("/")
+
+    user = session["user"]
+    session_id = session["session_id"]
+
+    user_preferences = calculate_user_preference(user)
+    cities, all_cities = calculate_city_score(user, user_preferences, city_list)
+
+    # Vollständige Rangliste (inkl. gesehene Städte) für globale Stats
+    full_scored = score_all_cities(user, user_preferences, city_list)
+
+    # Globale Rang-Statistik lesen, BEVOR die eigene Session eingerechnet wird
+    city_avg_ranks = get_city_avg_ranks()
+
+    # Nur beim ersten Abschluss speichern – ein Refresh der Seite darf
+    # Ergebnisse und globale Statistiken nicht doppelt zählen
+    if not is_session_completed(session_id):
+        for rank, item in enumerate(cities, start=1):
+            save_result(
+                session_id=session_id,
+                rank=rank,
+                city=item[0],
+                country=item[1],
+                score=all_cities[rank - 1][0]
+            )
+        complete_session(session_id)
+        print_session_overview(session_id)
+        update_city_global_stats(full_scored)
+        global city_shown_counts
+        city_shown_counts = get_city_shown_counts()
+
+    result_url = f"{request.host_url}results/{session_id}"
+    img = qrcode.make(result_url)
+
+    buffered = BytesIO()
+    img.save(buffered, format="JPEG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+    personality = get_personality_type(user)
+
+    # Seltenheit nur gegen die ANDEREN Spieler vergleichen
+    other_sessions = get_completed_session_count(exclude_session_id=session_id)
+    rarity = None
+    if other_sessions > 0:
+        liked_cities_global = get_all_liked_cities(exclude_session_id=session_id)
+        rarity = calculate_rarity(user, city_list, liked_cities_global)
+        rarity["total_sessions"] = other_sessions
+
+    hidden_gem = find_hidden_gem(user, full_scored, city_avg_ranks)
+
+    all_swipes   = get_all_completed_swipes()
+    travel_buddy = find_travel_buddy(user, session_id, city_list, all_swipes)
+
+    todo_activities = get_todo_activities(user, cities)
+
+    return render_template("results.html", cities=cities, img_b64=img_str,
+                           personality=personality, rarity=rarity,
+                           session_id=session_id, short_code=session.get("short_code"),
+                           hidden_gem=hidden_gem, todo_activities=todo_activities,
+                           travel_buddy=travel_buddy)
 
 
 @app.route("/results/<session_id>")
@@ -260,27 +272,16 @@ def results_by_id(session_id):
 
     # User-Profil aus gespeicherten Swipes rekonstruieren
     swipes = get_swipes_for_session(session_id)
-    user = {
-        "liked_rankings": [], "liked_cities": [], "liked_countries": [], "liked_continents": [],
-        "count_liked_cost": [0,0,0,0], "count_liked_population": [0,0,0,0],
-        "count_liked_ocean_distance": [0,0,0], "count_liked_abs_latitude": [0,0,0],
-        "disliked_rankings": [], "disliked_cities": [], "disliked_countries": [], "disliked_continents": [],
-        "count_disliked_cost": [0,0,0,0], "count_disliked_population": [0,0,0,0],
-        "count_disliked_ocean_distance": [0,0,0], "count_disliked_abs_latitude": [0,0,0],
-    }
-    for _, city_name, _, _, choice in swipes:
-        city_data = city_map.get(city_name)
-        if city_data:
-            scoring(city_data, user, choice == "like")
+    user = build_user_from_swipes(swipes, city_map)
 
     personality = get_personality_type(user)
 
-    global_stats = get_global_stats()
+    other_sessions = get_completed_session_count(exclude_session_id=session_id)
     rarity = None
-    if global_stats["total_sessions"] > 1:
-        liked_cities_global = get_all_liked_cities()
+    if other_sessions > 0:
+        liked_cities_global = get_all_liked_cities(exclude_session_id=session_id)
         rarity = calculate_rarity(user, city_list, liked_cities_global)
-        rarity["total_sessions"] = global_stats["total_sessions"]
+        rarity["total_sessions"] = other_sessions
 
     user_preferences = calculate_user_preference(user)
     full_scored = score_all_cities(user, user_preferences, city_list)
@@ -292,7 +293,7 @@ def results_by_id(session_id):
 
     todo_activities = get_todo_activities(user, cities)
 
-    return render_template("results.html", cities=cities, sd=[], img_b64=None,
+    return render_template("results.html", cities=cities, img_b64=None,
                            personality=personality, rarity=rarity, hidden_gem=hidden_gem,
                            todo_activities=todo_activities, travel_buddy=travel_buddy)
 
@@ -317,7 +318,7 @@ def _load_session_cities(sid):
 
 @app.route("/compare/join", methods=["POST"])
 def compare_join():
-    if "session_id" not in session:
+    if not session.get("session_id"):
         return redirect("/")
     friend_code = request.form.get("friend_code", "").strip().upper()
     friend_id = get_session_id_by_code(friend_code)
@@ -372,7 +373,7 @@ def compare_group():
     per_session_ranks = []
     for s in sessions:
         swipes = get_swipes_for_session(s["id"])
-        user = _build_user_from_swipes(swipes, city_map)
+        user = build_user_from_swipes(swipes, city_map)
         prefs = calculate_user_preference(user)
         scored = score_all_cities(user, prefs, city_list)
         ranks = {city[0]: rank for rank, (_, city) in enumerate(scored)}
@@ -400,6 +401,7 @@ def compare_group():
 
 
 @app.route("/admin")
+@require_admin
 def admin():
     sessions = get_all_sessions_overview()
     city_stats = get_city_result_stats()
@@ -412,16 +414,19 @@ def admin():
 
 
 @app.route("/admin/delete/<session_id>", methods=["POST"])
+@require_admin
 def admin_delete_session(session_id):
     delete_session(session_id)
     return redirect("/admin")
 
 
 @app.route("/admin/delete-all", methods=["POST"])
+@require_admin
 def admin_delete_all():
     delete_all_sessions()
     return redirect("/admin")
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # debug=False: Der Werkzeug-Debugger wäre im offenen Messe-Netz Remote Code Execution
+    app.run(host='0.0.0.0', port=5000, debug=False)

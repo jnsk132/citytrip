@@ -8,7 +8,7 @@ import csv
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from functions import scoring, calculate_user_preference, calculate_city_score
+from functions import build_user_from_swipes, calculate_user_preference, calculate_city_score
 import sqlite3
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,22 +35,6 @@ def get_swipes(session_id):
     return rows
 
 
-def build_user_from_swipes(swipes):
-    user = {
-        "liked_rankings": [], "liked_cities": [], "liked_countries": [], "liked_continents": [],
-        "count_liked_cost": [0, 0, 0, 0], "count_liked_population": [0, 0, 0, 0],
-        "count_liked_ocean_distance": [0, 0, 0], "count_liked_abs_latitude": [0, 0, 0],
-        "disliked_rankings": [], "disliked_cities": [], "disliked_countries": [], "disliked_continents": [],
-        "count_disliked_cost": [0, 0, 0, 0], "count_disliked_population": [0, 0, 0, 0],
-        "count_disliked_ocean_distance": [0, 0, 0], "count_disliked_abs_latitude": [0, 0, 0],
-    }
-    for _, city_name, _, _, choice in swipes:
-        city_data = city_map.get(city_name)
-        if city_data:
-            scoring(city_data, user, choice == "like")
-    return user
-
-
 def calculate_ranking(session_id):
     """
     Holt Swipes für die Session, berechnet das Ranking und gibt ein Array zurück.
@@ -61,9 +45,9 @@ def calculate_ranking(session_id):
         print(f"Keine Swipes für Session {session_id[:8]}... gefunden.")
         return []
 
-    user = build_user_from_swipes(swipes)
+    user = build_user_from_swipes(swipes, city_map)
     user_preferences = calculate_user_preference(user)
-    _, _, scored_cities = calculate_city_score(user, user_preferences, city_list)
+    _, scored_cities = calculate_city_score(user, user_preferences, city_list)
 
     ranked = [[city[0], city[1], round(score, 4)] for score, city in scored_cities]
     return ranked
