@@ -3,7 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Dein Reiseziel</title>
+    <title>Dein Reiseziel – CityTrip</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#292F36">
+    <meta property="og:title" content="Mein Reiseziel – CityTrip">
+    <meta property="og:description" content="Ich habe mein perfektes Reiseziel gefunden! Finde auch du dein Traumziel mit CityTrip.">
+    <meta property="og:image" content="{{ request.host_url }}static/start.png">
+    <meta property="og:type" content="website">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="/static/results-style.css">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
@@ -22,7 +28,7 @@
         <div class="image-wrapper">
             <div class="image-container">
                 <p class="rank-badge">#{{loop.index}}</p>
-                <img class="cropped_img" src="/static/Alle_Stadt_Bilder/{{city[11]}}.jpg" alt="Stadtbild">
+                <img class="cropped_img" src="/static/Alle_Stadt_Bilder_neu/{{city[11]}}.jpg" alt="Stadtbild">
                 <div class="gradient-overlay"></div>
                 <div class="image-content">
                     <h1 class="city_text">{{city[0]}}</h1>
@@ -76,12 +82,12 @@
                         <span class="rarity-category">{{ item.category }}</span>
                         <span class="rarity-user-pref">{{ item.user_pref }}</span>
                     </div>
-                    <span class="rarity-item-pct">{{ item.pct }}%</span>
+                    <span class="rarity-item-pct">{{ 100 - item.pct }}%</span>
                 </div>
                 <div class="rarity-track">
-                    <div class="rarity-fill" style="width: {{ item.pct }}%"></div>
+                    <div class="rarity-fill" style="width: {{ 100 - item.pct }}%"></div>
                 </div>
-                <p class="rarity-item-text">{{ item.pct }}% aller Likes teilen diese Vorliebe</p>
+                <p class="rarity-item-text">{{ 100 - item.pct }}% teilen diese Vorliebe <strong>nicht</strong></p>
             </div>
             {% endfor %}
         </div>
@@ -101,7 +107,7 @@
             <div class="image-wrapper">
                 <div class="image-container">
                     <p class="gem-badge">Hidden Gem</p>
-                    <img class="cropped_img" src="/static/Alle_Stadt_Bilder/{{ hidden_gem.city[11] }}.jpg" alt="Stadtbild">
+                    <img class="cropped_img" src="/static/Alle_Stadt_Bilder_neu/{{ hidden_gem.city[11] }}.jpg" alt="Stadtbild">
                     <div class="gradient-overlay"></div>
                     <div class="image-content">
                         <h1 class="city_text">{{ hidden_gem.city[0] }}</h1>
@@ -118,18 +124,23 @@
         <div class="travel-buddy-section">
             <div class="descriptive-container">
                 <h1 class="title">Dein Travel Buddy</h1>
-                <p class="scratch-hint-text">Unter {{ travel_buddy.total_players }} Spielern ist das dein perfekter Reisebegleiter.</p>
+                <p class="scratch-hint-text">Wir haben alle {{ travel_buddy.total_players }} Swipe-Profile verglichen – diese Person matcht am stärksten mit deinem Reisegeschmack.</p>
             </div>
             <div class="buddy-card">
 
-                <!-- Header: Avatar + Match-Badge -->
+                <!-- Header: Avatar + Match-Badge + Erklärung -->
                 <div class="buddy-header">
                     <div class="buddy-avatar-wrap">
-                        <div class="buddy-avatar"><span>🤠</span></div>
+                        <div class="buddy-avatar"><span>{{ travel_buddy.avatar }}</span></div>
                         <div class="buddy-match-badge">
                             <span class="buddy-match-number">{{ travel_buddy.match_pct }}%</span>
                             <span class="buddy-match-label">Match</span>
                         </div>
+                    </div>
+                    <div class="buddy-header-text">
+                        {% if travel_buddy.shared_stat %}
+                        <p class="buddy-shared-stat">✓ {{ travel_buddy.shared_stat }}</p>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -141,7 +152,7 @@
                         {% for city in travel_buddy.buddy_top3 %}
                         <div class="buddy-top3-item">
                             <div class="buddy-top3-img-wrap">
-                                <img class="buddy-top3-img" src="/static/Alle_Stadt_Bilder/{{ city[11] }}.jpg" alt="{{ city[0] }}">
+                                <img class="buddy-top3-img" src="/static/Alle_Stadt_Bilder_neu/{{ city[11] }}.jpg" alt="{{ city[0] }}">
                                 <div class="buddy-top3-gradient"></div>
                                 <span class="buddy-top3-rank">#{{ loop.index }}</span>
                                 <div class="buddy-top3-overlay">
@@ -160,7 +171,7 @@
                 <div class="buddy-match-wrap">
                     <p class="buddy-section-label">Wo ihr gemeinsam hin solltet</p>
                     <div class="buddy-city-card">
-                        <img class="buddy-city-img" src="/static/Alle_Stadt_Bilder/{{ travel_buddy.shared_city[11] }}.jpg" alt="Stadtbild">
+                        <img class="buddy-city-img" src="/static/Alle_Stadt_Bilder_neu/{{ travel_buddy.shared_city[11] }}.jpg" alt="Stadtbild">
                         <div class="buddy-city-gradient"></div>
                         <div class="buddy-city-overlay">
                             <p class="buddy-city-name">{{ travel_buddy.shared_city[0] }}</p>
@@ -172,7 +183,7 @@
                         {% if travel_buddy.shared_city_my_rank == travel_buddy.shared_city_buddy_rank %}
                         Bei euch beiden auf Platz {{ travel_buddy.shared_city_my_rank }}
                         {% else %}
-                        Du #{{ travel_buddy.shared_city_my_rank }} · Buddy #{{ travel_buddy.shared_city_buddy_rank }}
+                        Dein Rang {{ travel_buddy.shared_city_my_rank }}, sein Rang {{ travel_buddy.shared_city_buddy_rank }}
                         {% endif %}
                     </p>
                     {% endif %}
@@ -190,7 +201,7 @@
         <div class="bonus-slide">
         <div class="todo-section">
             <div class="descriptive-container">
-                <h1 class="title">Deine TODO-Liste</h1>
+                <h1 class="title">Deine Bucket-Liste</h1>
                 <p class="scratch-hint-text">5 Dinge, die du auf dieser Reise unbedingt machen solltest</p>
             </div>
             <div class="todo-card">
@@ -489,7 +500,7 @@
 
             <div class="sc-image-wrap">
                 <img class="sc-city-img"
-                     src="/static/Alle_Stadt_Bilder/{{ cities[0][11] }}.jpg"
+                     src="/static/Alle_Stadt_Bilder_neu/{{ cities[0][11] }}.jpg"
                      crossorigin="anonymous">
                 <div class="sc-img-gradient"></div>
                 <span class="sc-badge">#1 Empfehlung</span>

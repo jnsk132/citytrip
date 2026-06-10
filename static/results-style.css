@@ -1050,10 +1050,25 @@ body {
     gap: 1.5rem;
 }
 
-/* Header: Avatar + Match */
+/* Header: Avatar + Match + Text */
 .buddy-header {
     display: flex;
     justify-content: center;
+}
+
+.buddy-algo-hint {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: clamp(0.62rem, 1.5vmin, 0.72rem);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.buddy-shared-stat {
+    color: rgba(99, 179, 237, 0.85);
+    font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
+    margin: 0;
+    line-height: 1.4;
+    font-weight: 500;
 }
 
 .buddy-avatar-wrap {

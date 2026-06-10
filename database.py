@@ -36,15 +36,6 @@ def init_db():
     except Exception:
         pass
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS onboarding_answers (
-            id          TEXT PRIMARY KEY,
-            session_id  TEXT NOT NULL REFERENCES sessions(id),
-            question_nr INTEGER NOT NULL,
-            question    TEXT NOT NULL,
-            answer      TEXT NOT NULL
-        )
-    """)
-    cur.execute("""
         CREATE TABLE IF NOT EXISTS swipes (
             id         TEXT PRIMARY KEY,
             session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -80,31 +71,15 @@ def init_db():
     con.close()
 
 
-def save_onboarding_answers(session_id, answers):
-    """answers: list of dicts with keys question_nr, question, answer"""
-    con = get_connection()
-    cur = con.cursor()
-    for a in answers:
-        cur.execute(
-            "INSERT INTO onboarding_answers (id, session_id, question_nr, question, answer) VALUES (?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), session_id, a["question_nr"], a["question"], a["answer"])
-        )
-    con.commit()
-    con.close()
-
-
 def print_session_overview(session_id):
     con = get_connection()
     cur = con.cursor()
 
     cur.execute("SELECT id, created_at, completed FROM sessions WHERE id = ?", (session_id,))
     session = cur.fetchone()
-
-    cur.execute(
-        "SELECT question_nr, question, answer FROM onboarding_answers WHERE session_id = ? ORDER BY question_nr",
-        (session_id,)
-    )
-    onboarding = cur.fetchall()
+    if not session:
+        con.close()
+        return
 
     cur.execute(
         "SELECT iteration, city, country, choice FROM swipes WHERE session_id = ? ORDER BY iteration",
@@ -124,16 +99,6 @@ def print_session_overview(session_id):
     print("\n" + "═" * w)
     print(f"  SESSION: {session[0][:8]}...  |  {session[1]}  |  {'✓ abgeschlossen' if session[2] else '○ offen'}")
     print("═" * w)
-
-    if onboarding:
-        print("\n  ONBOARDING-ANTWORTEN")
-        print("  " + "─" * (w - 2))
-        for nr, question, answer in onboarding:
-            q_short = question if len(question) <= 38 else question[:35] + "..."
-            print(f"  {nr}. {q_short}")
-            print(f"     → {answer}")
-    else:
-        print("\n  Keine Onboarding-Antworten gespeichert.")
 
     if swipes:
         likes    = sum(1 for s in swipes if s[3] == "like")
@@ -236,7 +201,7 @@ def get_results(session_id):
 
 
 def get_all_sessions_overview():
-    """Returns all sessions with their onboarding answers, swipes and results."""
+    """Returns all sessions with their swipes and results."""
     con = get_connection()
     cur = con.cursor()
 
@@ -245,12 +210,6 @@ def get_all_sessions_overview():
 
     overview = []
     for sid, created_at, completed in sessions:
-        cur.execute(
-            "SELECT question_nr, question, answer FROM onboarding_answers WHERE session_id = ? ORDER BY question_nr",
-            (sid,)
-        )
-        onboarding = cur.fetchall()
-
         cur.execute(
             "SELECT iteration, city, country, continent, choice FROM swipes WHERE session_id = ? ORDER BY iteration",
             (sid,)
@@ -267,7 +226,6 @@ def get_all_sessions_overview():
             "id": sid,
             "created_at": created_at,
             "completed": bool(completed),
-            "onboarding": [{"nr": r[0], "question": r[1], "answer": r[2]} for r in onboarding],
             "swipes": [{"iteration": r[0], "city": r[1], "country": r[2], "continent": r[3], "choice": r[4]} for r in swipes],
             "results": [{"rank": r[0], "city": r[1], "country": r[2], "score": r[3]} for r in results],
         })
@@ -423,5 +381,25 @@ def complete_session(session_id):
         "UPDATE sessions SET completed = 1 WHERE id = ?",
         (session_id,)
     )
+    con.commit()
+    con.close()
+
+
+def delete_all_sessions():
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM swipes")
+    cur.execute("DELETE FROM results")
+    cur.execute("DELETE FROM sessions")
+    con.commit()
+    con.close()
+
+
+def delete_session(session_id):
+    con = get_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM swipes WHERE session_id = ?", (session_id,))
+    cur.execute("DELETE FROM results WHERE session_id = ?", (session_id,))
+    cur.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
     con.commit()
     con.close()

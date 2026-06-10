@@ -3,7 +3,13 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-        <title>Reiseziel Finder - Start</title>
+        <title>CityTrip – Finde dein Reiseziel</title>
+        <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+        <meta name="theme-color" content="#292F36">
+        <meta property="og:title" content="CityTrip – Finde dein perfektes Reiseziel">
+        <meta property="og:description" content="Entdecke durch 20 Klicks die Stadt, die deinen Wünschen entspricht!">
+        <meta property="og:image" content="{{ request.host_url }}static/start.png">
+        <meta property="og:type" content="website">
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
         <style>
             /* Basis-Styles & Reset */
@@ -181,7 +187,7 @@
 
         <div class="action-container">
             <div class="button-group">
-                <a href="/onboarding" class="btn-start">Los geht's</a>
+                <a href="/quiz" class="btn-start">Los geht's</a>
 
                 <button class="btn-contact" onclick="toggleContact()">
                     <span class="material-icons">mail</span>

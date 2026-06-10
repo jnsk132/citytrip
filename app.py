@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, request, session, jsonify
 from flask_session import Session
 from functions import *  # includes get_todo_activities
-from database import init_db, create_session, save_swipe, save_result, complete_session, get_results, save_onboarding_answers, print_session_overview, get_all_sessions_overview, get_global_stats, get_all_liked_cities, get_swipes_for_session, get_session_id_by_code, get_short_code, get_city_result_stats, get_city_shown_counts, update_city_global_stats, get_city_avg_ranks, get_all_completed_swipes
+from database import init_db, create_session, save_swipe, save_result, complete_session, get_results, print_session_overview, get_all_sessions_overview, get_global_stats, get_all_liked_cities, get_swipes_for_session, get_session_id_by_code, get_short_code, get_city_result_stats, get_city_shown_counts, update_city_global_stats, get_city_avg_ranks, get_all_completed_swipes, delete_session, delete_all_sessions
 
 def _build_user_from_swipes(swipes, city_map):
     user = {
@@ -75,24 +75,6 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/onboarding")
-def onboarding():
-    if "user" not in session:
-        return redirect("/")
-    return render_template("onboarding.html")
-
-
-@app.route("/onboarding/submit", methods=["POST"])
-def onboarding_submit():
-    if "user" not in session:
-        return jsonify({"error": "no session"}), 401
-    data = request.get_json()
-    answers = data.get("answers", [])
-    if answers:
-        save_onboarding_answers(session["session_id"], answers)
-    return jsonify({"ok": True})
-
-
 @app.route("/quiz/init")
 def quiz_init():
     if "user" not in session:
@@ -107,9 +89,9 @@ def quiz_init():
     return jsonify({
         "city_name": city_row[0],
         "country_name": city_row[1],
-        "file_path": f"static/Alle_Stadt_Bilder/{city_row[11]}.jpg",
+        "file_path": f"static/Alle_Stadt_Bilder_neu/{city_row[11]}.jpg",
         "iteration": 1,
-        "prefetch_path": f"static/Alle_Stadt_Bilder/{next_row[11]}.jpg",
+        "prefetch_path": f"static/Alle_Stadt_Bilder_neu/{next_row[11]}.jpg",
     })
 
 
@@ -147,7 +129,7 @@ def quiz():
     return render_template("file.html",
                            city_name=city_row[0],
                            country_name=city_row[1],
-                           file_path=f"static/Alle_Stadt_Bilder/{city_row[11]}.jpg",
+                           file_path=f"static/Alle_Stadt_Bilder_neu/{city_row[11]}.jpg",
                            iteration=session["iteration"])
 
 
@@ -251,9 +233,9 @@ def quiz_next():
     return jsonify({
         "city_name": city_row[0],
         "country_name": city_row[1],
-        "file_path": f"static/Alle_Stadt_Bilder/{city_row[11]}.jpg",
+        "file_path": f"static/Alle_Stadt_Bilder_neu/{city_row[11]}.jpg",
         "iteration": session["iteration"],
-        "prefetch_path": f"static/Alle_Stadt_Bilder/{new_next[11]}.jpg",
+        "prefetch_path": f"static/Alle_Stadt_Bilder_neu/{new_next[11]}.jpg",
     })
 
 
@@ -427,6 +409,18 @@ def admin():
         key=lambda x: x["count"]
     )
     return render_template("admin.html", sessions=sessions, city_stats=city_stats, city_shown_list=city_shown_list)
+
+
+@app.route("/admin/delete/<session_id>", methods=["POST"])
+def admin_delete_session(session_id):
+    delete_session(session_id)
+    return redirect("/admin")
+
+
+@app.route("/admin/delete-all", methods=["POST"])
+def admin_delete_all():
+    delete_all_sessions()
+    return redirect("/admin")
 
 
 if __name__ == '__main__':

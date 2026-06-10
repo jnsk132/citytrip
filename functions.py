@@ -41,7 +41,41 @@ PERSONALITY_TYPES = {
 }
 
 
+# Anteil jeder Kategorie im Städtedatensatz (190 Städte, gemessen).
+# Dient zur Prior-Korrektur: nur Präferenzen *über* der Basisrate zählen.
+_PRIOR_COST  = [0.032, 0.316, 0.332, 0.321]  # <20, 20-40, 40-60, 60+
+_PRIOR_POP   = [0.084, 0.216, 0.263, 0.437]  # <100k, 100k-500k, 500k-1.7M, 1.7M+
+_PRIOR_OCEAN = [0.116, 0.321, 0.563]          # <5km, 5-50km, >50km
+_PRIOR_LAT   = [0.379, 0.600, 0.021]          # <30°, 30-60°, >60°
+
+
 def _personality_scores(user):
+    def excess(liked, disliked, prior):
+        """Wie viel *mehr* als die Basisrate mag der Nutzer diese Kategorie?"""
+        net = [max(0, liked[i] - disliked[i]) for i in range(len(liked))]
+        total = sum(net)
+        if total == 0:
+            return [0.0] * len(liked)
+        probs = [x / total for x in net]
+        return [max(0.0, probs[i] - prior[i]) for i in range(len(liked))]
+
+    lp = excess(user["count_liked_population"],     user["count_disliked_population"],     _PRIOR_POP)
+    lc = excess(user["count_liked_cost"],           user["count_disliked_cost"],           _PRIOR_COST)
+    lo = excess(user["count_liked_ocean_distance"], user["count_disliked_ocean_distance"], _PRIOR_OCEAN)
+    ll = excess(user["count_liked_abs_latitude"],   user["count_disliked_abs_latitude"],   _PRIOR_LAT)
+
+    return {
+        "metropolen_fan":  lp[3] * 5,
+        "strandliebhaber": lo[0] * 4 + ll[0] * 2,
+        "kulturreisender": ll[1] * 2 + (lp[1] + lp[2]) * 1.5 + lc[1] * 1,
+        "backpacker":      lc[0] * 3 + lc[1] * 2,
+        "luxusurlauber":   lc[3] * 4 + lp[3] * 1,
+        "entdecker":       ll[2] * 2 + lp[0] * 2 + lo[2] * 1,
+    }
+
+
+def _fallback_scores(user):
+    """Net-Norm-Scores ohne Prior-Korrektur – nur als Tiebreaker bei Null-Signal."""
     def net_norm(liked, disliked):
         net = [max(0, liked[i] - disliked[i]) for i in range(len(liked))]
         total = sum(net)
@@ -67,15 +101,19 @@ def _personality_scores(user):
     }
 
 
-def get_personality_type(user):
+def _best_key(user):
     scores = _personality_scores(user)
-    best_key = max(scores, key=scores.get)
-    return PERSONALITY_TYPES[best_key]
+    if any(v > 0 for v in scores.values()):
+        return max(scores, key=scores.get)
+    return max(_fallback_scores(user), key=_fallback_scores(user).get)
+
+
+def get_personality_type(user):
+    return PERSONALITY_TYPES[_best_key(user)]
 
 
 def get_personality_key(user):
-    scores = _personality_scores(user)
-    return max(scores, key=scores.get)
+    return _best_key(user)
 
 
 def get_todo_activities(user, cities):
@@ -744,9 +782,34 @@ def find_travel_buddy(current_user, current_session_id, city_list, all_swipes):
     # Stadt aus meiner Top-3 finden, die beim Buddy am höchsten rankt
     buddy_prefs  = calculate_user_preference(best_buddy_user)
     buddy_scored = score_all_cities(best_buddy_user, buddy_prefs, city_list)
-    buddy_rank   = {city[0]: rank + 1 for rank, (_, city) in enumerate(buddy_scored)}
-    my_rank      = {city[0]: rank + 1 for rank, (_, city) in enumerate(my_scored)}
-    shared_city  = min(my_top3, key=lambda c: buddy_rank.get(c[0], len(city_list)))
+
+    buddy_seen = set(best_buddy_user["liked_cities"] + best_buddy_user["disliked_cities"])
+
+    # Unseen-Ränge für Buddy und mich berechnen (konsistent mit der #1/#2/#3-Anzeige)
+    buddy_unseen_rank = {}
+    idx = 1
+    for _, city in buddy_scored:
+        if city[0] not in buddy_seen:
+            buddy_unseen_rank[city[0]] = idx
+            idx += 1
+
+    my_unseen_rank = {}
+    idx = 1
+    for _, city in my_scored:
+        if city[0] not in seen:
+            my_unseen_rank[city[0]] = idx
+            idx += 1
+
+    # Shared city: aus meinen Top-3 die Stadt wählen, die beim Buddy am besten rankt
+    # und die der Buddy noch nicht gesehen hat
+    shared_city = None
+    for c in sorted(my_top3, key=lambda c: buddy_unseen_rank.get(c[0], len(city_list))):
+        if c[0] not in buddy_seen:
+            shared_city = c
+            break
+    # Fallback falls alle my_top3-Städte vom Buddy schon gesehen wurden
+    if shared_city is None and my_top3:
+        shared_city = min(my_top3, key=lambda c: buddy_unseen_rank.get(c[0], len(city_list)))
 
     # Stärkste gemeinsame Präferenzdimension finden
     def dom(lst): return lst.index(max(lst)) if max(lst) > 0 else 0
@@ -771,10 +834,9 @@ def find_travel_buddy(current_user, current_session_id, city_list, all_swipes):
                     f"Ihr teilt beide eine Vorliebe für {labels[my_d]}"
                 )
 
-    shared_city_my_rank    = my_rank.get(shared_city[0], 0) if shared_city else None
-    shared_city_buddy_rank = buddy_rank.get(shared_city[0], 0) if shared_city else None
+    shared_city_my_rank    = my_unseen_rank.get(shared_city[0], 0) if shared_city else None
+    shared_city_buddy_rank = buddy_unseen_rank.get(shared_city[0], 0) if shared_city else None
 
-    buddy_seen = set(best_buddy_user["liked_cities"] + best_buddy_user["disliked_cities"])
     buddy_top3 = []
     for _, city in buddy_scored:
         if city[0] not in buddy_seen:
@@ -791,6 +853,7 @@ def find_travel_buddy(current_user, current_session_id, city_list, all_swipes):
         "shared_city_buddy_rank": shared_city_buddy_rank,
         "shared_stat":            shared_stat,
         "buddy_top3":             buddy_top3,
+        "avatar":                 random.choice(["😎", "🤠", "🤗", "🥳"]),
     }
 
 

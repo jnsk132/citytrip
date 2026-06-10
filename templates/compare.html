@@ -4,6 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Gruppenvergleich – CityTrip</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#292F36">
+    <meta property="og:title" content="Gruppenvergleich – CityTrip">
+    <meta property="og:description" content="Vergleiche deine Reiseziel-Vorlieben mit Freunden und findet gemeinsam euer perfektes Reiseziel.">
+    <meta property="og:image" content="{{ request.host_url }}static/start.png">
+    <meta property="og:type" content="website">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <style>
         html, body {
@@ -485,7 +491,7 @@
         </div>
         <div class="hero-card">
             <img class="hero-img"
-                 src="/static/Alle_Stadt_Bilder/{{ group_top3[0][11] }}.jpg"
+                 src="/static/Alle_Stadt_Bilder_neu/{{ group_top3[0][11] }}.jpg"
                  alt="{{ group_top3[0][0] }}" loading="lazy">
             <div class="hero-gradient"></div>
             <span class="hero-badge">Gruppen-Favorit</span>
@@ -508,7 +514,7 @@
             {% for city in group_top3 %}
             <div class="top3-card">
                 <img class="top3-img"
-                     src="/static/Alle_Stadt_Bilder/{{ city[11] }}.jpg"
+                     src="/static/Alle_Stadt_Bilder_neu/{{ city[11] }}.jpg"
                      alt="{{ city[0] }}" loading="lazy">
                 <div class="top3-gradient"></div>
                 <span class="top3-medal">{{ medals[loop.index0] }}</span>
@@ -521,38 +527,6 @@
         </div>
     </div>
     {% endif %}
-
-    <!-- Gemeinsame Städte -->
-    <div class="section">
-        <div class="section-header">
-            <p class="section-title">Gemeinsame Städte</p>
-            <p class="section-desc">Städte, die bei jeder Person in den persönlichen Top-Ergebnissen auftauchen.</p>
-        </div>
-        {% if common %}
-        <div class="match-box">
-            <div class="match-box-header">
-                <span class="match-icon">🎯</span>
-                <div>
-                    <p class="match-box-title">{{ common|length }} {{ "Stadt" if common|length == 1 else "Städte" }} für alle!</p>
-                    <p class="match-box-subtitle">Alle in der Gruppe haben diese{{ " Stadt" if common|length == 1 else " Städte" }} auf ihrer Liste</p>
-                </div>
-            </div>
-            <div class="common-pills">
-                {% for city in common %}<span class="common-pill">{{ city }}</span>{% endfor %}
-            </div>
-        </div>
-        {% else %}
-        <div class="match-box no-match">
-            <div class="match-box-header">
-                <span class="match-icon">🌍</span>
-                <div>
-                    <p class="match-box-title">Keine gemeinsamen Städte</p>
-                    <p class="match-box-subtitle">Ihr habt sehr unterschiedliche Vorlieben – schaut in die Top 3 oben!</p>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
 
     <!-- Personen hinzufügen -->
     <div class="add-section">
@@ -600,7 +574,7 @@
                 {% for city in s.cities %}
                 <div class="city-card {{ 'matched' if city[0] in common else '' }}">
                     <div class="city-img-wrap">
-                        <img src="/static/Alle_Stadt_Bilder/{{ city[11] }}.jpg"
+                        <img src="/static/Alle_Stadt_Bilder_neu/{{ city[11] }}.jpg"
                              alt="{{ city[0] }}" loading="lazy">
                         <div class="city-gradient"></div>
                         <p class="city-rank">#{{ loop.index }}</p>

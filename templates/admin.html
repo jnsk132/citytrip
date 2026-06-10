@@ -59,6 +59,24 @@
             transition: color 0.15s;
         }
         .topbar-back:hover { color: var(--text); }
+        .topbar-delete-all {
+            background: none;
+            border: 1px solid rgba(192,57,43,0.4);
+            color: var(--dislike);
+            border-radius: 6px;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: background 0.15s, border-color 0.15s;
+            white-space: nowrap;
+        }
+        .topbar-delete-all:hover {
+            background: rgba(192,57,43,0.15);
+            border-color: var(--dislike);
+        }
 
         /* ── Stats bar ── */
         .stats-bar {
@@ -127,14 +145,40 @@
         .session-time {
             font-size: 0.8rem;
             color: var(--muted);
-            margin-left: auto;
         }
         .chevron {
             color: var(--muted);
             transition: transform 0.2s;
-            margin-left: 0.5rem;
         }
         .session-card.open .chevron { transform: rotate(180deg); }
+
+        .delete-btn {
+            background: none;
+            border: 1px solid rgba(192,57,43,0.3);
+            color: var(--dislike);
+            border-radius: 6px;
+            padding: 0.2rem 0.55rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: background 0.15s, border-color 0.15s;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .delete-btn:hover {
+            background: rgba(192,57,43,0.15);
+            border-color: var(--dislike);
+        }
+        .delete-btn-label { display: none; }
+        @media (min-width: 600px) {
+            .delete-btn-label { display: inline; }
+            .session-time { display: inline; }
+        }
+        @media (max-width: 599px) {
+            .session-time { display: none; }
+        }
 
         /* ── Session body ── */
         .session-body {
@@ -160,20 +204,6 @@
             letter-spacing: 0.1em;
             color: var(--accent);
             margin-bottom: 1rem;
-        }
-
-        /* ── Onboarding answers ── */
-        .qa-item { margin-bottom: 0.85rem; }
-        .qa-question {
-            font-size: 0.75rem;
-            color: var(--muted);
-            margin-bottom: 0.2rem;
-            line-height: 1.4;
-        }
-        .qa-answer {
-            font-size: 0.9rem;
-            color: var(--text);
-            line-height: 1.4;
         }
 
         /* ── Swipes ── */
@@ -244,6 +274,16 @@
             display: flex;
             gap: 0.5rem;
             flex-wrap: wrap;
+            flex-shrink: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .session-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+            flex-shrink: 0;
         }
         .chip {
             font-size: 0.72rem;
@@ -462,6 +502,12 @@
 
 <div class="topbar">
     <div class="topbar-title"><span>citytrip</span> · Admin</div>
+    <form method="POST" action="/admin/delete-all" style="margin:0">
+        <button type="submit" class="topbar-delete-all"
+                onclick="return confirm('Wirklich ALLE {{ sessions | length }} Sessions löschen? Das kann nicht rückgängig gemacht werden.')">
+            <i class="fa fa-trash"></i> Alle löschen
+        </button>
+    </form>
     <a class="topbar-back" href="/"><i class="fa fa-arrow-left"></i> Zurück zur App</a>
 </div>
 
@@ -617,26 +663,19 @@
                 {% endif %}
             </div>
 
-            <span class="session-time">{{ s.created_at[:16].replace("T", " ") }}</span>
-            <i class="fa fa-chevron-down chevron"></i>
+            <div class="session-right">
+                <span class="session-time">{{ s.created_at[:16].replace("T", " ") }}</span>
+                <form method="POST" action="/admin/delete/{{ s.id }}" style="margin:0" onclick="event.stopPropagation()">
+                    <button type="submit" class="delete-btn"
+                            onclick="return confirm('Session {{ s.id[:8] }}… wirklich löschen?')">
+                        <i class="fa fa-trash"></i><span class="delete-btn-label"> Löschen</span>
+                    </button>
+                </form>
+                <i class="fa fa-chevron-down chevron"></i>
+            </div>
         </div>
 
         <div class="session-body">
-
-            <!-- Onboarding -->
-            <div class="section">
-                <div class="section-title"><i class="fa fa-list-ul"></i>&nbsp; Onboarding</div>
-                {% if s.onboarding %}
-                    {% for a in s.onboarding %}
-                    <div class="qa-item">
-                        <div class="qa-question">{{ a.nr }}. {{ a.question }}</div>
-                        <div class="qa-answer">{{ a.answer }}</div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <p class="no-data">Keine Antworten gespeichert</p>
-                {% endif %}
-            </div>
 
             <!-- Swipes -->
             <div class="section">
