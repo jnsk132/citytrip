@@ -173,30 +173,30 @@ def get_todo_activities(user, cities):
     sleeping_under_stars = False
 
     if outside_europe:
-        specific.append("Probiere 3 neue lokale Spezialitäten")
+        specific.append("🍜 Iss drei Gerichte, die du noch nie gehört hast")
     if is_kultur:
-        specific.append("Besuche die Nationale Kunstgalerie")
+        specific.append("🎨 Besuch die Nationale Kunstgalerie und lass dich von einem Bild wirklich berühren")
     if is_high_price:
-        specific.append("Probiere einen neuen Abenteuersport aus")
+        specific.append("🪂 Mach einen Abenteuersport, den du dir zuhause nie trauen würdest")
     if is_low_price:
-        specific.append("Stelle dir ein 10€-Outfit in einem Second-Hand-Laden zusammen")
+        specific.append("👕 Stell dir für unter 10€ ein komplettes Outfit im Second-Hand-Laden zusammen")
     if is_ireland:
-        specific.append("Trinke ein Guinness in einem Pub")
+        specific.append("🍺 Trink ein frisch gezapftes Guinness in einem echten irischen Pub")
     if is_small_city:
-        specific.append("Schlafe unter den Sternen")
+        specific.append("🌟 Schlaf eine Nacht draußen und zähl so viele Sterne wie du kannst")
         sleeping_under_stars = True
     if near_sea:
-        specific.append("Springe von einer Klippe ins Wasser")
+        specific.append("🌊 Spring von einer Klippe ins Wasser")
         if not sleeping_under_stars:
-            specific.append("Schlafe am Strand")
+            specific.append("🏖️ Schlaf am Strand und lass dich vom Meeresrauschen wecken")
 
     universal = [
-        "Stehe früh auf und sieh den Sonnenaufgang",
-        "Leihe dir einen Motorroller aus und erkunde das Umland",
-        "Mache eine Fototour zu einem bestimmten Thema (Farben, Schatten, Türen, …)",
-        "Filme deinen Urlaub wie eine Dokumentation",
-        "Schreibe eine Postkarte an deine Freunde und Familie",
-        "Singe Karaoke in einer anderen Sprache",
+        "🌅 Steh sehr früher auf und schau dir den Sonnenaufgang an",
+        "🛵 Leih dir einen Motorroller aus und fahr einfach drauflos",
+        "📸 Mach eine Fototour mit Thema (nur rote Türen, nur Schatten, nur Hunde)",
+        "🎬 Film deinen Urlaub, als wäre es eine Dokumentation",
+        "📮 Schreib einer Person zuhause eine echte Postkarte",
+        "🎤 Sing Karaoke in einer Sprache, die du nicht sprichst",
     ]
 
     random.shuffle(specific)
