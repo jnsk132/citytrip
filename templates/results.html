@@ -5,29 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Dein Reiseziel – CityTrip</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-    <meta name="theme-color" content="#292F36">
+    <meta name="theme-color" content="#0a0d15">
     <meta property="og:title" content="Mein Reiseziel – CityTrip">
     <meta property="og:description" content="Ich habe mein perfektes Reiseziel gefunden! Finde auch du dein Traumziel mit CityTrip.">
     <meta property="og:image" content="{{ request.host_url }}static/start.png">
     <meta property="og:type" content="website">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
     <link rel="stylesheet" href="/static/results-style.css">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
+    <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+
     <div class="hero-container">
-        <h1 class="hero-text">Dein perfektes Reiseziel ist...</h1>
-        <a href="#content" class="scroll-arrow">
+        <span class="chip rise">✨ Analyse abgeschlossen</span>
+        <h1 class="hero-text rise rise-1">Dein perfektes <span class="grad-text">Reiseziel</span> ist...</h1>
+        <a href="#content" class="scroll-arrow btn-icon rise rise-3" aria-label="Zu den Ergebnissen scrollen">
             <i class="fa fa-chevron-down"></i>
         </a>
     </div>
 
     <div id="content">
         {% for city in cities %}
-        <div class="image-wrapper">
+        <div class="image-wrapper reveal">
             <div class="image-container">
-                <p class="rank-badge">#{{loop.index}}</p>
+                <p class="rank-badge">#{{ loop.index }}{% if loop.first %} · Dein Match{% endif %}</p>
                 <img class="cropped_img" src="/static/Alle_Stadt_Bilder_neu/{{city[11]}}.jpg" alt="Stadtbild">
                 <div class="gradient-overlay"></div>
                 <div class="image-content">
@@ -36,7 +43,7 @@
                 </div>
             </div>
         </div>
-        <div class="descriptive-container">
+        <div class="descriptive-container reveal">
             <p class="descriptive-text">{{ city[18] }}</p>
         </div>
         {% endfor %}
@@ -304,7 +311,7 @@
 
         {% if img_b64 %}
         <div class="button-wrapper">
-            <button class="restart-btn" onclick="openShareCard()">
+            <button class="btn-primary" onclick="openShareCard()">
                 <i class="fa fa-share-alt"></i> Teilen-Karte
             </button>
         </div>
@@ -338,7 +345,7 @@
         {% endif %}
 
         <div class="button-wrapper">
-            <a href="/" class="restart-btn">Nochmal versuchen</a>
+            <a href="/" class="btn-ghost">↺ &nbsp;Nochmal versuchen</a>
         </div>
     </div>
 
@@ -369,9 +376,9 @@
 
             /* Dunkler Gradient */
             var grad = ctx.createLinearGradient(0, 0, w, h);
-            grad.addColorStop(0,   '#4a5060');
-            grad.addColorStop(0.4, '#5c6475');
-            grad.addColorStop(1,   '#2e3340');
+            grad.addColorStop(0,   '#222a3a');
+            grad.addColorStop(0.4, '#2c3550');
+            grad.addColorStop(1,   '#141926');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, w, h);
 
@@ -385,8 +392,8 @@
 
             /* Glow hinter Flugzeug */
             var glow = ctx.createRadialGradient(cx, cy - 28, 0, cx, cy - 28, 60);
-            glow.addColorStop(0, 'rgba(236,79,11,0.35)');
-            glow.addColorStop(1, 'rgba(236,79,11,0)');
+            glow.addColorStop(0, 'rgba(255,122,24,0.4)');
+            glow.addColorStop(1, 'rgba(255,122,24,0)');
             ctx.fillStyle = glow;
             ctx.beginPath();
             ctx.arc(cx, cy - 28, 60, 0, Math.PI * 2);
@@ -394,19 +401,19 @@
 
             /* Flugzeug (Text-Zeichen, kein Emoji → Farbe steuerbar) */
             ctx.fillStyle = 'rgba(255,255,255,0.92)';
-            ctx.font = Math.min(52, w * 0.12) + 'px sans-serif';
+            ctx.font = Math.round(Math.min(52, w * 0.12)) + "px 'Outfit', sans-serif";
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('✈', cx, cy - 28);
 
             /* CTA */
-            ctx.fillStyle = '#ec4f0b';
-            ctx.font = 'bold ' + Math.min(22, w * 0.055) + 'px sans-serif';
+            ctx.fillStyle = '#ff7a18';
+            ctx.font = '800 ' + Math.round(Math.min(22, w * 0.055)) + "px 'Sora', sans-serif";
             ctx.fillText('Hier freirubbeln!', cx, cy + 26);
 
             /* Untertitel */
             ctx.fillStyle = 'rgba(255,255,255,0.45)';
-            ctx.font = Math.min(13, w * 0.032) + 'px sans-serif';
+            ctx.font = Math.round(Math.min(13, w * 0.032)) + "px 'Outfit', sans-serif";
             ctx.fillText('Dein Reisetyp wartet auf dich', cx, cy + 52);
 
         }
@@ -455,7 +462,7 @@
             if (typeof confetti !== 'function') return;
             var duration = 500;
             var end = Date.now() + duration;
-            var colors = ['#ec4f0b', '#ff7340', '#ffffff', '#ffd700', '#ff4757'];
+            var colors = ['#ff7a18', '#ff2e63', '#ffffff', '#ffd166', '#00e5a0'];
             (function frame() {
                 confetti({
                     particleCount: 6,
@@ -591,6 +598,28 @@
         }
     </script>
     {% endif %}
+
+    <script src="/static/ui.js"></script>
+    <script>
+    /* Konfetti-Salve, wenn Platz 1 ins Bild scrollt */
+    (function () {
+        var first = document.querySelector('#content .image-container');
+        if (!first || typeof confetti !== 'function' || !('IntersectionObserver' in window)) return;
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                io.disconnect();
+                var colors = ['#ff7a18', '#ff2e63', '#ffffff', '#ffd166'];
+                confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 }, colors: colors });
+                setTimeout(function () {
+                    confetti({ particleCount: 45, angle: 60,  spread: 60, origin: { x: 0, y: 0.7 }, colors: colors });
+                    confetti({ particleCount: 45, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors: colors });
+                }, 220);
+            });
+        }, { threshold: 0.55 });
+        io.observe(first);
+    })();
+    </script>
 
 </body>
 </html>

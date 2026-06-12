@@ -1,0 +1,284 @@
+/* ════════════════════════════════════════════════════════════════
+   CityTrip Design-System
+   Gemeinsame Tokens, Hintergrund, Buttons & Animationen
+   ════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    /* Farben */
+    --bg:           #0a0d15;
+    --bg-soft:      #11141d;
+    --surface:      rgba(255, 255, 255, 0.055);
+    --surface-2:    rgba(255, 255, 255, 0.09);
+    --surface-solid:#151a24;
+    --border:       rgba(255, 255, 255, 0.1);
+    --border-strong:rgba(255, 255, 255, 0.18);
+
+    --text:         #f4f6fb;
+    --text-dim:     rgba(244, 246, 251, 0.65);
+    --text-faint:   rgba(244, 246, 251, 0.4);
+
+    /* Marken-Gradient: Sunset */
+    --brand-1:      #ff7a18;
+    --brand-2:      #ff2e63;
+    --grad-brand:   linear-gradient(135deg, #ff7a18 0%, #ff4140 55%, #ff2e63 100%);
+    --grad-brand-soft: linear-gradient(135deg, rgba(255,122,24,0.16), rgba(255,46,99,0.16));
+
+    --like:         #00e5a0;
+    --dislike:      #ff4d6d;
+    --gold:         #ffd166;
+
+    /* Radii & Schatten */
+    --radius-lg:    28px;
+    --radius-md:    20px;
+    --radius-sm:    14px;
+    --shadow-card:  0 24px 60px rgba(0, 0, 0, 0.55);
+    --glow-brand:   0 10px 40px rgba(255, 87, 51, 0.4);
+
+    /* Typo */
+    --font-display: 'Sora', system-ui, sans-serif;
+    --font-body:    'Outfit', system-ui, sans-serif;
+}
+
+html {
+    background: var(--bg);
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+}
+
+/* ── Aurora-Hintergrund (auf jeder Seite) ───────────────────────── */
+.aurora {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 96, 40, 0.13), transparent 60%),
+        var(--bg);
+}
+
+.aurora span {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.5;
+    will-change: transform;
+}
+
+.aurora span:nth-child(1) {
+    width: 55vmax; height: 55vmax;
+    left: -18vmax; top: -22vmax;
+    background: radial-gradient(circle, rgba(255, 110, 30, 0.32), transparent 65%);
+    animation: drift1 26s ease-in-out infinite alternate;
+}
+
+.aurora span:nth-child(2) {
+    width: 48vmax; height: 48vmax;
+    right: -20vmax; top: 18%;
+    background: radial-gradient(circle, rgba(255, 46, 99, 0.22), transparent 65%);
+    animation: drift2 32s ease-in-out infinite alternate;
+}
+
+.aurora span:nth-child(3) {
+    width: 50vmax; height: 50vmax;
+    left: 8%; bottom: -28vmax;
+    background: radial-gradient(circle, rgba(88, 60, 255, 0.16), transparent 65%);
+    animation: drift3 38s ease-in-out infinite alternate;
+}
+
+@keyframes drift1 {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to   { transform: translate3d(9vmax, 7vmax, 0) scale(1.15); }
+}
+@keyframes drift2 {
+    from { transform: translate3d(0, 0, 0) scale(1.1); }
+    to   { transform: translate3d(-8vmax, -6vmax, 0) scale(0.95); }
+}
+@keyframes drift3 {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(10vmax, -8vmax, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .aurora span { animation: none; }
+}
+
+/* ── Buttons ────────────────────────────────────────────────────── */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 1.05rem 2.6rem;
+    font-family: var(--font-display);
+    font-size: clamp(1.05rem, 3vw, 1.2rem);
+    font-weight: 700;
+    color: #fff;
+    background: var(--grad-brand);
+    background-size: 150% 150%;
+    border: none;
+    border-radius: 99px;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: var(--glow-brand), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 14px 50px rgba(255, 87, 51, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-primary:active { transform: scale(0.96); }
+
+@media (hover: none) {
+    .btn-primary:hover { transform: none; box-shadow: var(--glow-brand); }
+    .btn-primary:active { transform: scale(0.96); }
+}
+
+.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    font-family: var(--font-display);
+    font-size: clamp(0.95rem, 2.8vw, 1.1rem);
+    font-weight: 600;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    text-decoration: none;
+    cursor: pointer;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: background 0.2s ease, transform 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-ghost:hover  { background: var(--surface-2); }
+.btn-ghost:active { transform: scale(0.96); }
+
+/* Runder Icon-Button */
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.4rem;
+    height: 3.4rem;
+    border-radius: 50%;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-icon:hover  { background: var(--surface-2); }
+.btn-icon:active { transform: scale(0.92); }
+
+/* ── Glass-Karte ────────────────────────────────────────────────── */
+.glass {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+/* ── Gradient-Text ──────────────────────────────────────────────── */
+.grad-text {
+    background: var(--grad-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+
+/* ── Eyebrow / Chip ─────────────────────────────────────────────── */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.95rem;
+    border-radius: 99px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* ── Scroll-Reveal ──────────────────────────────────────────────── */
+.reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.in {
+    opacity: 1;
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+}
+
+/* ── Einblend-Animation beim Laden ──────────────────────────────── */
+@keyframes riseIn {
+    from { opacity: 0; transform: translateY(26px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.rise {
+    animation: riseIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.rise-1 { animation-delay: 0.08s; }
+.rise-2 { animation-delay: 0.18s; }
+.rise-3 { animation-delay: 0.3s; }
+.rise-4 { animation-delay: 0.42s; }
+
+@media (prefers-reduced-motion: reduce) {
+    .rise { animation: none; }
+}
+
+/* ── Scrollbar dezent ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 99px;
+    border: 3px solid var(--bg);
+}

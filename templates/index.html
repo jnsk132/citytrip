@@ -5,195 +5,309 @@
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <title>CityTrip – Finde dein Reiseziel</title>
         <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-        <meta name="theme-color" content="#292F36">
+        <meta name="theme-color" content="#0a0d15">
         <meta property="og:title" content="CityTrip – Finde dein perfektes Reiseziel">
         <meta property="og:description" content="Entdecke durch 20 Klicks die Stadt, die deinen Wünschen entspricht!">
         <meta property="og:image" content="{{ request.host_url }}static/start.png">
         <meta property="og:type" content="website">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <link rel="stylesheet" href="/static/theme.css">
         <style>
-            /* Basis-Styles & Reset */
-            * {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-            }
-
-            html {
-                background: #292F36;
+            html, body {
+                overflow-x: hidden;
             }
 
             body {
-                background: linear-gradient(0deg, #292F36 40%, #ec4f0b 100%);
-                background-repeat: no-repeat;
                 min-height: 100vh;
-                min-height: -webkit-fill-available;
-                font-family: sans-serif;
+                min-height: 100dvh;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                text-align: center;
-                padding: 0 1rem;
-            }
-
-            p {
-                color: #a9a9a9;
-                line-height: 1.5;
-            }
-
-            .highlight {
-                color: #ec2d0b;
-                font-weight: bold;
-            }
-
-            /* Bild-Container */
-            .image-section {
-                margin-top: 3rem;
-                max-width: 100%;
-            }
-
-            .img-fluid {
-                max-width: 80vmin;
-                height: auto;
-            }
-
-            /* Überschrift */
-            .main-title {
-                margin-top: 1rem;
-                color: white;
-                font-size: clamp(1.8rem, 7vmin, 3rem);
-                line-height: 1.2;
-                padding: 0 1rem;
-                word-wrap: break-word;
-            }
-
-            /* Beschreibungstext */
-            .description-container {
-                display: flex;
                 justify-content: center;
-                margin-top: 0.5rem; /* Ersatz für mt-2 */
+                text-align: center;
+                padding: 2rem 1.25rem;
+                position: relative;
+            }
+
+            /* ── Schwebende Stadt-Karten ────────────────────────── */
+            .float-stage {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                z-index: 0;
+            }
+
+            .float-card {
+                position: absolute;
+                width: clamp(86px, 24vw, 150px);
+                aspect-ratio: 3 / 4;
+                border-radius: 18px;
+                overflow: hidden;
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+                animation: floaty 7s ease-in-out infinite alternate;
+                opacity: 0.9;
+            }
+
+            .float-card img {
                 width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+            }
+
+            .float-card::after {
+                content: attr(data-city);
+                position: absolute;
+                left: 0; right: 0; bottom: 0;
+                padding: 1.4rem 0.6rem 0.5rem;
+                font-family: var(--font-display);
+                font-size: 0.68rem;
+                font-weight: 700;
+                color: #fff;
+                background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+            }
+
+            .fc-1 { top: 6%;  left: -2%;  rotate: -8deg; animation-delay: 0s;    }
+            .fc-2 { top: 3%;  right: -3%; rotate: 7deg;  animation-delay: -2.2s; }
+            .fc-3 { bottom: 13%; left: -4%; rotate: 6deg;  animation-delay: -4s; }
+            .fc-4 { bottom: 10%; right: -4%; rotate: -7deg; animation-delay: -1.4s; }
+
+            @keyframes floaty {
+                from { transform: translateY(-9px); }
+                to   { transform: translateY(11px); }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                .float-card { animation: none; }
+            }
+
+            /* Auf großen Screens rücken die Karten näher an die Mitte */
+            @media (min-width: 900px) {
+                .fc-1 { top: 12%; left: 12%; }
+                .fc-2 { top: 10%; right: 12%; }
+                .fc-3 { bottom: 16%; left: 15%; }
+                .fc-4 { bottom: 14%; right: 15%; }
+            }
+
+            /* ── Hero-Inhalt ────────────────────────────────────── */
+            .hero {
+                position: relative;
+                z-index: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                max-width: 720px;
+            }
+
+            .hero .chip {
+                margin-bottom: 1.4rem;
+            }
+
+            .chip .plane {
+                display: inline-block;
+                animation: planeWiggle 3s ease-in-out infinite;
+            }
+
+            @keyframes planeWiggle {
+                0%, 100% { transform: translateX(0) rotate(0deg); }
+                50%      { transform: translateX(4px) rotate(8deg); }
+            }
+
+            .main-title {
+                color: var(--text);
+                font-size: clamp(2.3rem, 9.5vmin, 4.2rem);
+                font-weight: 800;
+                line-height: 1.08;
+                margin-bottom: 1.2rem;
             }
 
             .description-text {
-                width: 75%; /* Entspricht w-75 */
+                color: var(--text-dim);
+                font-size: clamp(1rem, 2.6vmin, 1.15rem);
+                font-weight: 300;
+                line-height: 1.65;
+                max-width: 34rem;
+                margin-bottom: 2.2rem;
             }
 
-            /* Button-Bereich */
-            .action-container {
-                margin-top: 3rem; /* Ersatz für mt-5 */
+            .description-text b {
+                color: var(--text);
+                font-weight: 600;
+            }
+
+            /* ── CTA ────────────────────────────────────────────── */
+            .button-group {
+                display: flex;
+                gap: 0.9rem;
+                justify-content: center;
+                align-items: center;
+                margin-bottom: 2.8rem;
             }
 
             .btn-start {
-                display: inline-block;
-                padding: 1rem 2.5rem;
-                font-size: clamp(1rem, 3vw, 1.25rem);
-                color: #292F36;
-                background-color: white;
-                text-decoration: none;
-                border-radius: 4rem;
-                transition: all 0.3s ease;
-                border: none;
-                cursor: pointer;
-                box-shadow: 10px 10px 40px rgb(28, 28, 28);
-                font-weight: bold;
+                padding: 1.15rem 3rem;
+                font-size: clamp(1.1rem, 3.4vw, 1.3rem);
+                position: relative;
             }
 
-            .btn-start:hover {
-                background-color: #ec4f0b;
-                color: white;
-                transform: scale(1.05);
+            .btn-start::after {
+                content: '';
+                position: absolute;
+                inset: -4px;
+                border-radius: 99px;
+                border: 2px solid rgba(255, 87, 51, 0.45);
+                animation: ctaPulse 2.2s ease-out infinite;
+                pointer-events: none;
             }
 
-            @media (hover: none) {
-                .btn-start:hover { transform: none; }
-                .btn-start:active {
-                    background-color: #ec4f0b;
-                    color: white;
-                    transform: scale(0.97);
-                }
+            @keyframes ctaPulse {
+                0%   { transform: scale(1);    opacity: 1; }
+                70%  { transform: scale(1.18); opacity: 0; }
+                100% { transform: scale(1.18); opacity: 0; }
             }
 
-            /* Layout für die Buttons nebeneinander */
-            .button-group {
+            .btn-start .arrow {
+                transition: transform 0.25s ease;
+            }
+
+            .btn-start:hover .arrow { transform: translateX(4px); }
+
+            /* ── Stats ──────────────────────────────────────────── */
+            .stats-row {
                 display: flex;
-                gap: 1rem;
-                justify-content: center;
-                align-items: center;
+                align-items: stretch;
+                gap: 0;
+                padding: 1rem 0.5rem;
+                width: min(100%, 26rem);
             }
 
-            .btn-contact {
+            .stat {
+                flex: 1;
                 display: flex;
-                align-items: center;
-                justify-content: center;
-                width: 3.5rem;
-                height: 3.5rem;
-                background-color: rgba(255, 255, 255, 0.1);
-                color: white;
-                border-radius: 50%;
-                text-decoration: none;
-                transition: all 0.2s;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                cursor: pointer;
+                flex-direction: column;
+                gap: 0.15rem;
+                padding: 0 0.75rem;
             }
 
-            .btn-contact:hover {
-                background-color: rgba(255, 255, 255, 0.2);
+            .stat + .stat {
+                border-left: 1px solid var(--border);
             }
 
-            /* Simpler Modal-Stil (Kontaktdaten) */
+            .stat-num {
+                font-family: var(--font-display);
+                font-size: clamp(1.5rem, 6vmin, 2.1rem);
+                font-weight: 800;
+                background: var(--grad-brand);
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+
+            .stat-label {
+                color: var(--text-faint);
+                font-size: clamp(0.68rem, 1.9vmin, 0.8rem);
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+            }
+
+            /* ── Kontakt-Modal ──────────────────────────────────── */
             #contact-overlay {
                 display: none;
                 position: fixed;
-                top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.8);
+                inset: 0;
+                background: rgba(5, 7, 12, 0.75);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
                 z-index: 1000;
                 justify-content: center;
                 align-items: center;
+                padding: 1.5rem;
             }
 
             .contact-card {
-                background: #fff;
-                color: #000;
+                background: var(--surface-solid);
+                border: 1px solid var(--border-strong);
+                border-radius: var(--radius-md);
                 padding: 2rem;
-                border-radius: 1rem;
-                max-width: 300px;
+                max-width: 320px;
+                width: 100%;
                 text-align: left;
+                box-shadow: var(--shadow-card);
+                animation: riseIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
             }
 
-            .contact-card h2 { margin-bottom: 1rem; color: #000000; }
+            .contact-card h2 {
+                margin-bottom: 1.2rem;
+                font-size: 1.3rem;
+            }
+
+            .contact-card p {
+                color: var(--text-dim);
+                line-height: 1.8;
+            }
+
+            .contact-card strong { color: var(--text); }
+
             .close-btn {
-                display: block; margin-top: 1.5rem; color: #666;
-                cursor: pointer; text-decoration: underline; font-size: 0.9rem;
+                display: inline-block;
+                margin-top: 1.5rem;
+                color: var(--text-faint);
+                cursor: pointer;
+                text-decoration: underline;
+                font-size: 0.9rem;
             }
-
         </style>
     </head>
     <body>
+        <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
 
-        <div class="image-section">
-            <img class="img-fluid" src="static/start.png" alt="Start Illustration">
+        <div class="float-stage" aria-hidden="true">
+            <div class="float-card fc-1 rise rise-1" data-city="Paris"><img src="/static/Alle_Stadt_Bilder_neu/Paris.jpg" alt=""></div>
+            <div class="float-card fc-2 rise rise-2" data-city="Bangkok"><img src="/static/Alle_Stadt_Bilder_neu/Bangkok.jpg" alt=""></div>
+            <div class="float-card fc-3 rise rise-3" data-city="Rome"><img src="/static/Alle_Stadt_Bilder_neu/Rome.jpg" alt=""></div>
+            <div class="float-card fc-4 rise rise-4" data-city="Barcelona"><img src="/static/Alle_Stadt_Bilder_neu/Barcelona.jpg" alt=""></div>
         </div>
 
-        <h1 class="main-title">
-            Finde dein<span class="highlight"> perfektes </span>Reiseziel!
-        </h1>
+        <main class="hero">
+            <span class="chip rise"><span class="plane">✈️</span> CityTrip</span>
 
-        <div class="description-container">
-            <p class="description-text">
-                Auf der Suche nach deinem nächsten Traumurlaub, einer Stadt für dein Auslandssemester oder dem perfekten Wochenendtrip? Entdecke durch 20 Klicks die Stadt, die deinen Wünschen entspricht!
+            <h1 class="main-title rise rise-1">
+                Finde dein<br><span class="grad-text">perfektes Reiseziel</span>
+            </h1>
+
+            <p class="description-text rise rise-2">
+                Traumurlaub, Auslandssemester oder Wochenendtrip?
+                Swipe dich durch Städte aus aller Welt – nach
+                <b>20&nbsp;Swipes</b> kennen wir die Stadt, die zu dir passt.
             </p>
-        </div>
 
-        <div class="action-container">
-            <div class="button-group">
-                <a href="/quiz" class="btn-start">Los geht's</a>
-
-                <button class="btn-contact" onclick="toggleContact()">
+            <div class="button-group rise rise-3">
+                <a href="/quiz" class="btn-primary btn-start">Los geht's <span class="arrow">→</span></a>
+                <button class="btn-icon" onclick="toggleContact()" aria-label="Kontakt">
                     <span class="material-icons">mail</span>
                 </button>
             </div>
-        </div>
+
+            <div class="stats-row glass rise rise-4">
+                <div class="stat">
+                    <span class="stat-num" data-count="190">0</span>
+                    <span class="stat-label">Städte</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-num" data-count="20">0</span>
+                    <span class="stat-label">Swipes</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-num" data-count="1">0</span>
+                    <span class="stat-label">Match</span>
+                </div>
+            </div>
+        </main>
 
         <div id="contact-overlay" onclick="toggleContact()">
             <div class="contact-card" onclick="event.stopPropagation()">
@@ -210,7 +324,22 @@
                 const isVisible = overlay.style.display === 'flex';
                 overlay.style.display = isVisible ? 'none' : 'flex';
             }
-        </script>
 
+            /* Count-up der Statistiken */
+            (function () {
+                document.querySelectorAll('.stat-num').forEach(function (el) {
+                    const target = parseInt(el.dataset.count, 10);
+                    const dur = 1200;
+                    const t0 = performance.now() + 500; // nach den Einblendungen
+                    function tick(now) {
+                        const p = Math.min(Math.max((now - t0) / dur, 0), 1);
+                        const eased = 1 - Math.pow(1 - p, 3);
+                        el.textContent = Math.round(eased * target);
+                        if (p < 1) requestAnimationFrame(tick);
+                    }
+                    requestAnimationFrame(tick);
+                });
+            })();
+        </script>
     </body>
 </html>
