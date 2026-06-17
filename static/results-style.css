@@ -951,7 +951,7 @@ body {
 }
 
 .buddy-shared-stat {
-    color: rgba(99, 179, 237, 0.85);
+    color: var(--text-dim);
     font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
     margin: 0;
     line-height: 1.4;
@@ -967,14 +967,14 @@ body {
     width: 5.2rem;
     height: 5.2rem;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.32);
-    border: 2px solid var(--border-strong);
+    background: var(--grad-brand-soft), rgba(0, 0, 0, 0.32);
+    border: 2px solid rgba(255, 122, 24, 0.45);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 2.5rem;
     line-height: 1;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), var(--glow-brand);
 }
 
 .buddy-match-badge {
@@ -984,24 +984,28 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(99, 179, 237, 0.16);
-    border: 1px solid rgba(99, 179, 237, 0.5);
+    background: var(--surface-solid);
+    border: 1px solid rgba(255, 122, 24, 0.5);
     border-radius: 0.85rem;
     padding: 0.32rem 0.7rem;
+    box-shadow: var(--glow-brand);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
 
 .buddy-match-number {
     font-family: var(--font-display);
-    color: #63b3ed;
+    background: var(--grad-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
     font-size: clamp(1rem, 3.2vmin, 1.2rem);
     font-weight: 800;
     line-height: 1;
 }
 
 .buddy-match-label {
-    color: #63b3ed;
+    color: var(--brand-1);
     font-size: 0.58rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;

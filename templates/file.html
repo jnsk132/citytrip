@@ -172,40 +172,39 @@
                 pointer-events: none;
             }
 
-            /* ── LIKE / NOPE Stempel ────────────────────────────── */
+            /* ── LIKE / NOPE Pille ──────────────────────────────── */
             .swipe-hint {
                 position: absolute;
-                top: 1.6rem;
+                top: 1.5rem;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.45rem;
                 font-family: var(--font-display);
-                font-size: clamp(1.5rem, 6vmin, 2.2rem);
-                font-weight: 800;
-                letter-spacing: 0.12em;
-                padding: 0.2rem 0.9rem;
-                border-radius: 12px;
-                border: 4px solid;
+                font-size: clamp(0.95rem, 3.6vmin, 1.25rem);
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                padding: 0.5rem 1.1rem;
+                border-radius: 99px;
                 opacity: 0;
                 transition: opacity 0.12s ease;
                 pointer-events: none;
                 z-index: 10;
                 text-transform: uppercase;
-                backdrop-filter: blur(2px);
-                -webkit-backdrop-filter: blur(2px);
+                box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
             }
 
             .swipe-hint.like {
                 left: 1.4rem;
-                color: var(--like);
-                border-color: var(--like);
-                transform: rotate(-14deg);
-                text-shadow: 0 0 18px rgba(0, 229, 160, 0.6);
+                background: linear-gradient(135deg, #2dd49c, #14b86c);
+                color: #04332e;
             }
 
             .swipe-hint.dislike {
                 right: 1.4rem;
-                color: var(--dislike);
-                border-color: var(--dislike);
-                transform: rotate(14deg);
-                text-shadow: 0 0 18px rgba(255, 77, 109, 0.6);
+                background: linear-gradient(135deg, #ff4140, #ff2e63);
+                color: #fff;
             }
 
             .gradient-overlay {
@@ -275,18 +274,15 @@
             }
 
             .dislike-button {
-                background: rgba(255, 77, 109, 0.12);
-                border: 2px solid rgba(255, 77, 109, 0.55);
-                color: var(--dislike);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
-                box-shadow: 0 10px 32px rgba(255, 77, 109, 0.25);
+                background: linear-gradient(135deg, #ff4140, #ff2e63);
+                color: #fff;
+                box-shadow: 0 10px 36px rgba(255, 46, 99, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
             }
 
             .like-button {
-                background: linear-gradient(135deg, #00e5a0, #00b88f);
-                color: #03281d;
-                box-shadow: 0 10px 36px rgba(0, 229, 160, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+                background: linear-gradient(135deg, #2dd49c, #14b86c);
+                color: #04332e;
+                box-shadow: 0 10px 36px rgba(45, 212, 191, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
             }
 
             .swipe-tip {
@@ -515,6 +511,14 @@
 
             tip.style.display = 'none';
 
+            // Nächste Karte schon beim Laden vorausladen, damit der erste Swipe flüssig ist
+            {% if prefetch_path %}
+            (function () {
+                const firstPrefetch = new Image();
+                firstPrefetch.src = "{{ prefetch_path }}";
+            })();
+            {% endif %}
+
             // Debug-Modus: ?debug in der URL startet die Animation sofort
             if (new URLSearchParams(location.search).has('debug')) {
                 showResultLoader('/results');
@@ -628,9 +632,9 @@
                     // Farbverlauf auf der Karte
                     const intensity = Math.min(Math.abs(dx) / 160, 0.75);
                     if (dx > 0) {
-                        swipeColor.style.background = 'linear-gradient(to left, rgba(0,229,160,0.7), transparent)';
+                        swipeColor.style.background = 'linear-gradient(to left, rgba(45,212,156,0.6), rgba(20,184,104,0.14), transparent)';
                     } else {
-                        swipeColor.style.background = 'linear-gradient(to right, rgba(255,77,109,0.7), transparent)';
+                        swipeColor.style.background = 'linear-gradient(to right, rgba(255,46,99,0.6), rgba(255,65,64,0.14), transparent)';
                     }
                     swipeColor.style.opacity = Math.abs(dx) > 10 ? intensity : 0;
                 }

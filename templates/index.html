@@ -303,7 +303,7 @@
                     <span class="stat-label">Swipes</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-num" data-count="1">0</span>
+                    <span class="stat-num" data-count="100" data-suffix="%">0</span>
                     <span class="stat-label">Match</span>
                 </div>
             </div>
@@ -329,12 +329,13 @@
             (function () {
                 document.querySelectorAll('.stat-num').forEach(function (el) {
                     const target = parseInt(el.dataset.count, 10);
+                    const suffix = el.dataset.suffix || '';
                     const dur = 1200;
                     const t0 = performance.now() + 500; // nach den Einblendungen
                     function tick(now) {
                         const p = Math.min(Math.max((now - t0) / dur, 0), 1);
                         const eased = 1 - Math.pow(1 - p, 3);
-                        el.textContent = Math.round(eased * target);
+                        el.textContent = Math.round(eased * target) + suffix;
                         if (p < 1) requestAnimationFrame(tick);
                     }
                     requestAnimationFrame(tick);

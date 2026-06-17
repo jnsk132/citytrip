@@ -123,10 +123,15 @@ def quiz():
         session["next_city_data"] = get_next_city(user, city_list, extra_seen={city_row[0]},
                                                   city_shown_counts=city_shown_counts)
 
+    next_city = session.get("next_city_data")
+    prefetch_path = (f"static/Alle_Stadt_Bilder_neu/{next_city[11]}.jpg"
+                     if next_city else None)
+
     return render_template("file.html",
                            city_name=city_row[0],
                            country_name=city_row[1],
                            file_path=f"static/Alle_Stadt_Bilder_neu/{city_row[11]}.jpg",
+                           prefetch_path=prefetch_path,
                            iteration=session["iteration"])
 
 

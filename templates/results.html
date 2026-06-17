@@ -23,16 +23,16 @@
     <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
 
     <div class="hero-container">
-        <span class="chip rise">✨ Analyse abgeschlossen</span>
-        <h1 class="hero-text rise rise-1">Dein perfektes <span class="grad-text">Reiseziel</span> ist...</h1>
-        <a href="#content" class="scroll-arrow btn-icon rise rise-3" aria-label="Zu den Ergebnissen scrollen">
+        <span class="chip">✨ Analyse abgeschlossen</span>
+        <h1 class="hero-text">Dein perfektes <span class="grad-text">Reiseziel</span> ist...</h1>
+        <a href="#content" class="scroll-arrow btn-icon" aria-label="Zu den Ergebnissen scrollen">
             <i class="fa fa-chevron-down"></i>
         </a>
     </div>
 
     <div id="content">
         {% for city in cities %}
-        <div class="image-wrapper reveal">
+        <div class="image-wrapper">
             <div class="image-container">
                 <p class="rank-badge">#{{ loop.index }}{% if loop.first %} · Dein Match{% endif %}</p>
                 <img class="cropped_img" src="/static/Alle_Stadt_Bilder_neu/{{city[11]}}.jpg" alt="Stadtbild">
@@ -43,7 +43,7 @@
                 </div>
             </div>
         </div>
-        <div class="descriptive-container reveal">
+        <div class="descriptive-container">
             <p class="descriptive-text">{{ city[18] }}</p>
         </div>
         {% endfor %}
@@ -94,7 +94,7 @@
                 <div class="rarity-track">
                     <div class="rarity-fill" style="width: {{ 100 - item.pct }}%"></div>
                 </div>
-                <p class="rarity-item-text">{{ 100 - item.pct }}% teilen diese Vorliebe <strong>nicht</strong></p>
+                <p class="rarity-item-text">{{ 100 - item.pct }}% teilen diese Vorliebe nicht</p>
             </div>
             {% endfor %}
         </div>
@@ -360,7 +360,9 @@
         var scratchCount = 0;
 
         function initCanvas() {
-            var dpr = window.devicePixelRatio || 1;
+            /* dpr auf 2 begrenzen: auf iPhones ist dpr oft 3, was den
+               getImageData-Puffer in checkReveal unnötig riesig macht. */
+            var dpr = Math.min(window.devicePixelRatio || 1, 2);
             var w   = wrapper.offsetWidth;
             var h   = wrapper.offsetHeight;
             canvas.width  = w * dpr;
@@ -441,12 +443,22 @@
         }
 
         function checkReveal() {
-            var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-            var transparent = 0;
-            for (var i = 3; i < data.length; i += 4) {
-                if (data[i] < 128) transparent++;
+            if (revealed) return;
+            var w = canvas.width, h = canvas.height;
+            var data = ctx.getImageData(0, 0, w, h).data;
+            /* Nur ein grobes Raster abtasten (jedes 4. Pixel pro Achse →
+               ~1/16 der Punkte). Spart auf dem Main-Thread Millionen
+               Iterationen, ohne das Ergebnis spürbar zu verfälschen. */
+            var step = 4;
+            var transparent = 0, total = 0;
+            for (var y = 0; y < h; y += step) {
+                var row = y * w * 4;
+                for (var x = 0; x < w; x += step) {
+                    total++;
+                    if (data[row + x * 4 + 3] < 128) transparent++;
+                }
             }
-            if (transparent / (canvas.width * canvas.height) > 0.42) revealAll();
+            if (transparent / total > 0.42) revealAll();
         }
 
         function revealAll() {
@@ -459,28 +471,29 @@
         }
 
         function launchConfetti() {
-            if (typeof confetti !== 'function') return;
-            var duration = 500;
-            var end = Date.now() + duration;
-            var colors = ['#ff7a18', '#ff2e63', '#ffffff', '#ffd166', '#00e5a0'];
-            (function frame() {
-                confetti({
-                    particleCount: 6,
-                    angle: 60,
-                    spread: 55,
-                    origin: { x: 0, y: 0.65 },
-                    colors: colors
-                });
-                confetti({
-                    particleCount: 6,
-                    angle: 120,
-                    spread: 55,
-                    origin: { x: 1, y: 0.65 },
-                    colors: colors
-                });
-                if (Date.now() < end) requestAnimationFrame(frame);
-            })();
+            launchConfettiCard(wrapper);
         }
+
+        /* Konfetti nur in einem kleinen, fixierten Canvas rund um die
+           übergebene Karte. iOS muss pro Frame nur diese kleine Fläche neu
+           zeichnen statt der ganzen Seite → kein Ruckler. */
+        function launchConfettiCard(target) {
+            if (typeof confetti !== 'function' || !target) return;
+            var rect = target.getBoundingClientRect();
+            var pad = 90;
+            var cv = document.createElement('canvas');
+            cv.style.cssText = 'position:fixed;pointer-events:none;z-index:1500;'
+                + 'left:' + (rect.left - pad) + 'px;top:' + (rect.top - pad) + 'px;'
+                + 'width:' + (rect.width + pad * 2) + 'px;height:' + (rect.height + pad * 2) + 'px;';
+            document.body.appendChild(cv);
+            var fire = confetti.create(cv, { resize: true });
+            var colors = ['#ff7a18', '#ff2e63', '#ffffff', '#ffd166', '#00e5a0'];
+            fire({ particleCount: 90, spread: 80, startVelocity: 32,
+                   origin: { x: 0.5, y: 0.55 }, colors: colors });
+            setTimeout(function () { cv.remove(); }, 2500);
+        }
+        /* Auch fürs Konfetti bei Karte #1 (Scroll-Trigger) verfügbar machen. */
+        window.__cardConfetti = launchConfettiCard;
 
         window.addEventListener('load', initCanvas);
 
@@ -600,26 +613,6 @@
     {% endif %}
 
     <script src="/static/ui.js"></script>
-    <script>
-    /* Konfetti-Salve, wenn Platz 1 ins Bild scrollt */
-    (function () {
-        var first = document.querySelector('#content .image-container');
-        if (!first || typeof confetti !== 'function' || !('IntersectionObserver' in window)) return;
-        var io = new IntersectionObserver(function (entries) {
-            entries.forEach(function (entry) {
-                if (!entry.isIntersecting) return;
-                io.disconnect();
-                var colors = ['#ff7a18', '#ff2e63', '#ffffff', '#ffd166'];
-                confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 }, colors: colors });
-                setTimeout(function () {
-                    confetti({ particleCount: 45, angle: 60,  spread: 60, origin: { x: 0, y: 0.7 }, colors: colors });
-                    confetti({ particleCount: 45, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors: colors });
-                }, 220);
-            });
-        }, { threshold: 0.55 });
-        io.observe(first);
-    })();
-    </script>
 
 </body>
 </html>
