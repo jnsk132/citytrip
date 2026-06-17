@@ -613,6 +613,7 @@ body {
 }
 .bonus-scroller {
     display: flex;
+    align-items: stretch;          /* alle Slides gleich hoch (= höchster Slide) */
     overflow-x: scroll;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
@@ -623,7 +624,35 @@ body {
     flex: 0 0 100%;
     min-width: 0;
     scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
 }
+/* Die jeweilige Sektion füllt die volle Höhe des Slides */
+.bonus-slide > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 1. Hidden Gem – Bildkarte wächst vertikal mit und passt sich an */
+.bonus-slide .hidden-gem-section .image-wrapper { flex: 1; }
+.bonus-slide .hidden-gem-section .image-container {
+    display: flex;
+    flex: 1;
+}
+.bonus-slide .hidden-gem-section .cropped_img { height: 100%; }
+
+/* 2. Travel Buddy – Karte wächst mit und passt sich an */
+.bonus-slide .buddy-card { flex: 1; }
+
+/* 3. Bucket-Liste – Hintergrund-Container wächst mit, Items füllen ihn */
+.bonus-slide .todo-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.bonus-slide .todo-card .todo-list { flex: 1; }
+.bonus-slide .todo-card .todo-item { flex: 1; }
 .bonus-scrollbar-row {
     display: flex;
     align-items: center;
@@ -1155,4 +1184,251 @@ body {
     font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
     text-align: center;
     margin: 0;
+}
+
+/* --- Ranking-Challenge ("Schlag den Algorithmus") --- */
+.rc-section {
+    margin: 1.5rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    padding: 1.75rem;
+}
+
+.rc-head { margin-bottom: 1.25rem; }
+
+.rc-chip {
+    display: inline-block;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: clamp(0.7rem, 1.7vmin, 0.82rem);
+    font-weight: 600;
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    margin-bottom: 0.75rem;
+}
+
+.rc-title {
+    font-family: var(--font-display);
+    color: var(--text);
+    font-size: clamp(1.15rem, 4vmin, 1.5rem);
+    font-weight: 800;
+    line-height: 1.2;
+    margin: 0 0 0.4rem;
+}
+
+.rc-subtitle {
+    color: var(--text-dim);
+    font-size: clamp(0.78rem, 2vmin, 0.92rem);
+    line-height: 1.45;
+    margin: 0;
+}
+
+.rc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.rc-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.75rem;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: grab;
+    will-change: transform;
+}
+
+.rc-dragging {
+    cursor: grabbing;
+    z-index: 5;
+    position: relative;
+    border-color: var(--brand-1);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+.rc-pos {
+    flex-shrink: 0;
+    width: 1.7rem;
+    height: 1.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: var(--text-dim);
+    background: var(--surface);
+    border-radius: 50%;
+}
+
+.rc-thumb {
+    flex-shrink: 0;
+    width: 3rem;
+    height: 3rem;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    pointer-events: none;
+}
+
+.rc-info { flex: 1; min-width: 0; }
+
+.rc-name {
+    font-family: var(--font-display);
+    color: var(--text);
+    font-weight: 700;
+    font-size: clamp(0.9rem, 2.4vmin, 1.05rem);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.rc-country {
+    color: var(--text-faint);
+    font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
+    margin: 0.1rem 0 0;
+}
+
+.rc-reveal {
+    display: none;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.rc-revealed .rc-reveal { display: block; }
+
+.rc-score {
+    color: var(--brand-1);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.82rem;
+    margin: 0 0 0.3rem;
+}
+
+.rc-reasons {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.rc-reasons li {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.18rem 0.6rem;
+    font-size: clamp(0.68rem, 1.6vmin, 0.78rem);
+    color: var(--text-dim);
+}
+
+.rc-status {
+    flex-shrink: 0;
+    min-width: 2.4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+}
+
+.rc-status-icon {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.05rem;
+    line-height: 1;
+    color: var(--text-faint);
+}
+
+.rc-status-text {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-faint);
+    white-space: nowrap;
+}
+
+.rc-revealed .rc-correct { border-color: rgba(120, 220, 120, 0.4); }
+.rc-revealed .rc-correct .rc-status-icon { color: #6fe06f; }
+.rc-revealed .rc-wrong .rc-status-icon   { color: var(--brand-1); }
+
+.rc-grip {
+    flex-shrink: 0;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+}
+
+.rc-revealed .rc-grip { display: none; }
+.rc-revealed .rc-card { cursor: default; touch-action: auto; }
+
+.rc-submit {
+    width: 100%;
+    margin-top: 1.1rem;
+}
+
+.rc-submit:disabled {
+    opacity: 0.75;
+    cursor: default;
+    box-shadow: none;
+}
+
+.rc-result {
+    display: none;
+    margin-top: 1.1rem;
+}
+
+.rc-result.rc-show { display: block; }
+
+.rc-verdict {
+    text-align: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(0.95rem, 2.6vmin, 1.15rem);
+    color: var(--text);
+    margin: 0 0 0.9rem;
+    line-height: 1.3;
+}
+
+.rc-metrics {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.rc-metric {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.9rem 0.6rem;
+}
+
+.rc-metric-num {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(1.4rem, 5vmin, 1.9rem);
+    line-height: 1;
+    background: var(--grad-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.rc-metric-label {
+    color: var(--text-faint);
+    font-size: clamp(0.68rem, 1.6vmin, 0.78rem);
+    text-align: center;
 }

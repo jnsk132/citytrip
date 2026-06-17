@@ -249,11 +249,13 @@ def results():
 
     todo_activities = get_todo_activities(user, cities)
 
+    challenge = get_ranking_challenge(user, user_preferences, city_list)
+
     return render_template("results.html", cities=cities, img_b64=img_str,
                            personality=personality, rarity=rarity,
                            session_id=session_id, short_code=session.get("short_code"),
                            hidden_gem=hidden_gem, todo_activities=todo_activities,
-                           travel_buddy=travel_buddy)
+                           travel_buddy=travel_buddy, challenge=challenge)
 
 
 @app.route("/results/<session_id>")
@@ -298,9 +300,12 @@ def results_by_id(session_id):
 
     todo_activities = get_todo_activities(user, cities)
 
+    challenge = get_ranking_challenge(user, user_preferences, city_list)
+
     return render_template("results.html", cities=cities, img_b64=None,
                            personality=personality, rarity=rarity, hidden_gem=hidden_gem,
-                           todo_activities=todo_activities, travel_buddy=travel_buddy)
+                           todo_activities=todo_activities, travel_buddy=travel_buddy,
+                           challenge=challenge)
 
 
 def _load_session_cities(sid):
@@ -434,4 +439,4 @@ def admin_delete_all():
 
 if __name__ == '__main__':
     # debug=False: Der Werkzeug-Debugger wäre im offenen Messe-Netz Remote Code Execution
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,5 +1,17 @@
 import csv
+import json
+import os
 import random
+
+# Von Hand (mit KI) vorgeschriebene Stadt-Texte. Schlüssel = deutscher Stadtname.
+# Liegt eine Stadt hier vor, wird dieser Text genutzt; sonst greift der
+# automatische Baustein-Generator unten als Fallback.
+_DESC_PATH = os.path.join(os.path.dirname(__file__), "static", "city_descriptions.json")
+try:
+    with open(_DESC_PATH, encoding="utf-8") as _f:
+        CITY_DESCRIPTIONS = json.load(_f)
+except (FileNotFoundError, json.JSONDecodeError):
+    CITY_DESCRIPTIONS = {}
 
 
 def new_user():
@@ -439,6 +451,13 @@ def calculate_user_preference(user):
 # Beschreibungstext für Ergebnisse erzeugen
 def get_city_description(city, used_descriptions):
     city_name = city[0]
+
+    # 1. Bevorzugt: von Hand geschriebener Text aus city_descriptions.json
+    prewritten = CITY_DESCRIPTIONS.get(city_name)
+    if prewritten:
+        return prewritten.strip()
+
+    # 2. Fallback: automatisch aus Bausteinen zusammengesetzter Text
     pop = float(city[6])
     dist = float(city[7])
     lat = abs(float(city[8]))
@@ -652,6 +671,116 @@ def calculate_city_score(user, user_preferences, city_list):
         top_3_cities.append(city_data)
 
     return top_3_cities, scored_cities
+
+
+# --- Ranking-Challenge ("Schlag den Algorithmus") -------------------------
+# Labels pro Bin-Index, identisch zur Kategorisierung in scoring()/categorise()
+_COST_LABELS  = ["sehr günstig", "günstig", "mittlere Kosten", "teuer"]
+_POP_LABELS   = ["Kleinstadt", "mittelgroße Stadt", "Großstadt", "Megacity"]
+_OCEAN_LABELS = ["direkt am Meer", "in Wassernähe", "im Landesinneren"]
+_LAT_LABELS   = ["nah am Äquator", "gemäßigte Zone", "weit vom Äquator"]
+
+
+def _fmt_signed(value):
+    """Formatiert einen Score-Beitrag mit Vorzeichen, z.B. +4.5 oder −2."""
+    v = round(value, 1)
+    if v == int(v):
+        v = int(v)
+    return ("+" if value >= 0 else "−") + str(abs(v))
+
+
+def explain_city_score(user, user_preferences, city):
+    """Schlüsselt den Score aus calculate_city_score in seine Einzelbeiträge auf.
+    Gibt total (= identischer Score) und nach Einfluss sortierte Begründungen zurück."""
+    cost_cats  = [20, 40, 60]
+    pop_cats   = [100000, 500000, 1700000]
+    ocean_cats = [5, 50]
+    lat_cats   = [30, 60]
+
+    avg_weight = (user_preferences["weight_cost"] +
+                  user_preferences["weight_population"] +
+                  user_preferences["weight_ocean_distance"] +
+                  user_preferences["weight_latitude"]) / 4
+    country_bonus   = avg_weight * 0.5
+    continent_bonus = avg_weight * 1.5
+
+    contributions = []  # (label, value)
+
+    # Kontinent: liked und disliked können sich gegenseitig aufheben (wie im Scoring)
+    cont_val = 0
+    if city[2] in user["liked_continents"]:    cont_val += continent_bonus
+    if city[2] in user["disliked_continents"]: cont_val -= continent_bonus
+    if cont_val:
+        contributions.append((f"{city[2]} {'liegt dir' if cont_val > 0 else 'meidest du'}", cont_val))
+
+    country_val = 0
+    if city[1] in user["liked_countries"]:    country_val += country_bonus
+    if city[1] in user["disliked_countries"]: country_val -= country_bonus
+    if country_val:
+        contributions.append((f"{city[1]} {'magst du' if country_val > 0 else 'meidest du'}", country_val))
+
+    # Kategorien: Gewicht × Präferenz für den Bin, in dem die Stadt liegt
+    if city[4] != '':
+        idx = categorise(cost_cats, city[4])
+        contributions.append((_COST_LABELS[idx],
+                              user_preferences["weight_cost"] * user_preferences["cost"][idx]))
+    idx = categorise(pop_cats, city[6])
+    contributions.append((_POP_LABELS[idx],
+                          user_preferences["weight_population"] * user_preferences["population"][idx]))
+    idx = categorise(ocean_cats, city[7])
+    contributions.append((_OCEAN_LABELS[idx],
+                          user_preferences["weight_ocean_distance"] * user_preferences["ocean_distance"][idx]))
+    idx = categorise(lat_cats, abs(float(city[8])))
+    contributions.append((_LAT_LABELS[idx],
+                          user_preferences["weight_latitude"] * user_preferences["latitude"][idx]))
+
+    total = sum(v for _, v in contributions)
+
+    # Nur Beiträge mit echtem Einfluss, stärkster zuerst, höchstens vier
+    reasons = [f"{label} ({_fmt_signed(v)})"
+               for label, v in sorted(contributions, key=lambda x: abs(x[1]), reverse=True)
+               if abs(v) > 0.01][:4]
+    if not reasons:
+        reasons = ["neutral – keine starke Vorliebe (0)"]
+
+    return {"total": round(total, 1), "reasons": reasons}
+
+
+def get_ranking_challenge(user, user_preferences, city_list):
+    """Wählt 5 ungesehene Städte mit gespreiztem Score für die Ranking-Challenge.
+    Liefert eine gemischte Liste (für die Anzeige); jede Stadt trägt ihren echten
+    Rang (1 = bester Score) und die aufgeschlüsselte Begründung."""
+    _, scored = calculate_city_score(user, user_preferences, city_list)
+
+    # Die oben schon angezeigten Top-3 überspringen, damit das Raten echt bleibt
+    pool = scored[3:] if len(scored) >= 8 else scored
+    if len(pool) < 5:
+        return None
+
+    n = len(pool)
+    # Gespreizte Positionen: bester Rest, dann zunehmend schlechter platziert
+    idxs = []
+    for f in (0.0, 0.06, 0.18, 0.45, 0.85):
+        i = min(int(round(f * (n - 1))), n - 1)
+        while i in idxs:
+            i += 1
+        idxs.append(i)
+
+    challenge = []
+    for true_rank, i in enumerate(sorted(idxs), start=1):
+        _, city = pool[i]
+        info = explain_city_score(user, user_preferences, city)
+        challenge.append({
+            "name": city[0],
+            "country": city[1],
+            "img": city[11],
+            "true_rank": true_rank,
+            "total": info["total"],
+            "reasons": info["reasons"],
+        })
+
+    random.shuffle(challenge)  # Anzeige-Reihenfolge mischen, echter Rang bleibt im Datensatz
+    return challenge
 
 
 def _preference_vector(user):

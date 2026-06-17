@@ -286,6 +286,206 @@
         </div>
         </div><!-- /.bonus-scroller-wrap -->
 
+        {% if challenge %}
+        <div class="rc-section reveal">
+            <div class="rc-head">
+                <span class="rc-chip">🧭 Wie tickt der Algorithmus?</span>
+                <h2 class="rc-title">Denkt der Algorithmus <span class="grad-text">wie du</span>?</h2>
+                <p class="rc-subtitle">Sortiere die 5 Städte so, wie sie zu dir passen – oben passt am besten, unten am wenigsten. Danach siehst du, wie ähnlich der Algorithmus dich einschätzt und warum.</p>
+            </div>
+
+            <div class="rc-list" id="rcList">
+                {% for c in challenge %}
+                <div class="rc-card" data-true-rank="{{ c.true_rank }}" data-total="{{ c.total }}">
+                    <span class="rc-pos"></span>
+                    <img class="rc-thumb" src="/static/Alle_Stadt_Bilder_neu/{{ c.img }}.jpg" alt="{{ c.name }}" draggable="false">
+                    <div class="rc-info">
+                        <p class="rc-name">{{ c.name }}</p>
+                        <p class="rc-country">{{ c.country }}</p>
+                        <div class="rc-reveal">
+                            <p class="rc-score">Score {{ c.total }}</p>
+                            <ul class="rc-reasons">
+                                {% for r in c.reasons %}<li>{{ r }}</li>{% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    <span class="rc-status" aria-hidden="true"></span>
+                    <span class="rc-grip" aria-hidden="true">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="3" r="1.4" fill="currentColor"/><circle cx="11" cy="3" r="1.4" fill="currentColor"/><circle cx="5" cy="8" r="1.4" fill="currentColor"/><circle cx="11" cy="8" r="1.4" fill="currentColor"/><circle cx="5" cy="13" r="1.4" fill="currentColor"/><circle cx="11" cy="13" r="1.4" fill="currentColor"/></svg>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <button class="rc-submit btn-primary" id="rcSubmit">Vergleichen</button>
+
+            <div class="rc-result" id="rcResult">
+                <p class="rc-verdict" id="rcVerdict"></p>
+                <div class="rc-metrics">
+                    <div class="rc-metric">
+                        <span class="rc-metric-num" id="rcExact">–</span>
+                        <span class="rc-metric-label">Plätze gleich gesehen</span>
+                    </div>
+                    <div class="rc-metric">
+                        <span class="rc-metric-num" id="rcMatch">–</span>
+                        <span class="rc-metric-label">Übereinstimmung mit dir</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function () {
+            var list = document.getElementById('rcList');
+            if (!list) return;
+            var btn = document.getElementById('rcSubmit');
+
+            function cards() {
+                return Array.prototype.slice.call(list.querySelectorAll('.rc-card'));
+            }
+            function updatePositions() {
+                cards().forEach(function (c, i) {
+                    c.querySelector('.rc-pos').textContent = i + 1;
+                });
+            }
+            function snap(els) {
+                var m = new Map();
+                els.forEach(function (el) { m.set(el, el.getBoundingClientRect().top); });
+                return m;
+            }
+            function flip(els, oldTops) {
+                els.forEach(function (el) {
+                    var oldTop = oldTops.get(el);
+                    if (oldTop === undefined) return;
+                    var delta = oldTop - el.getBoundingClientRect().top;
+                    if (Math.abs(delta) < 1) return;
+                    el.style.transition = 'none';
+                    el.style.transform = 'translateY(' + delta + 'px)';
+                    requestAnimationFrame(function () {
+                        requestAnimationFrame(function () {
+                            el.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                            el.style.transform = '';
+                        });
+                    });
+                });
+            }
+
+            updatePositions();
+
+            // --- Pointer-basiertes Drag-Sortieren (touch- & iOS-tauglich) ---
+            var dragEl = null, grabOffset = 0, pointerId = null;
+
+            function onDown(e) {
+                if (list.classList.contains('rc-revealed')) return;
+                var card = e.target.closest('.rc-card');
+                if (!card) return;
+                dragEl = card;
+                pointerId = e.pointerId;
+                grabOffset = e.clientY - card.getBoundingClientRect().top;
+                card.setPointerCapture(pointerId);
+                card.classList.add('rc-dragging');
+                e.preventDefault();
+            }
+
+            function onMove(e) {
+                if (!dragEl || e.pointerId !== pointerId) return;
+                e.preventDefault();
+
+                dragEl.style.transform = '';
+                var homeTop = dragEl.getBoundingClientRect().top;
+                dragEl.style.transform = 'translateY(' + (e.clientY - grabOffset - homeTop) + 'px)';
+
+                var dragMid = e.clientY - grabOffset + dragEl.offsetHeight / 2;
+                var sibs = cards().filter(function (c) { return c !== dragEl; });
+                var ref = null;
+                for (var i = 0; i < sibs.length; i++) {
+                    var r = sibs[i].getBoundingClientRect();
+                    if (dragMid < r.top + r.height / 2) { ref = sibs[i]; break; }
+                }
+                if (ref !== dragEl.nextSibling) {
+                    var oldTops = snap(sibs);
+                    list.insertBefore(dragEl, ref);
+                    flip(sibs, oldTops);
+                    dragEl.style.transform = '';
+                    var nt = dragEl.getBoundingClientRect().top;
+                    dragEl.style.transform = 'translateY(' + (e.clientY - grabOffset - nt) + 'px)';
+                    updatePositions();
+                }
+            }
+
+            function onUp(e) {
+                if (!dragEl) return;
+                dragEl.classList.remove('rc-dragging');
+                dragEl.style.transition = 'transform 0.2s ease';
+                dragEl.style.transform = '';
+                var el = dragEl;
+                setTimeout(function () { el.style.transition = ''; }, 220);
+                dragEl = null;
+                pointerId = null;
+            }
+
+            list.addEventListener('pointerdown', onDown);
+            list.addEventListener('pointermove', onMove);
+            list.addEventListener('pointerup', onUp);
+            list.addEventListener('pointercancel', onUp);
+
+            // --- Auswertung & Auflösung ---
+            btn.addEventListener('click', function () {
+                if (list.classList.contains('rc-revealed')) return;
+                var cs = cards();
+                var n = cs.length;
+                var exact = 0, dsum = 0;
+
+                cs.forEach(function (c, i) {
+                    var guessed = i + 1;                                  // wo DU sie hattest
+                    var truth = parseInt(c.getAttribute('data-true-rank'), 10);
+                    var d = guessed - truth;
+                    dsum += d * d;
+                    var status = c.querySelector('.rc-status');
+                    if (d === 0) {
+                        exact++;
+                        c.classList.add('rc-correct');
+                        status.innerHTML = '<span class="rc-status-icon">✓</span>'
+                                         + '<span class="rc-status-text">gleich gesehen</span>';
+                    } else {
+                        c.classList.add('rc-wrong');
+                        // Pfeil zeigt in Richtung deiner Platzierung; Zahl = dein Platz
+                        var arrow = d > 0 ? '↓' : '↑';
+                        status.innerHTML = '<span class="rc-status-icon">' + arrow + '</span>'
+                                         + '<span class="rc-status-text">du: #' + guessed + '</span>';
+                    }
+                });
+
+                var spearman = n > 1 ? 1 - (6 * dsum) / (n * (n * n - 1)) : 1;
+                var pct = Math.round(((spearman + 1) / 2) * 100);
+                document.getElementById('rcExact').textContent = exact + ' / ' + n;
+                document.getElementById('rcMatch').textContent = pct + '%';
+
+                var verdict;
+                if (pct >= 85)      verdict = 'Der Algorithmus tickt fast genau wie du. 🎯';
+                else if (pct >= 65) verdict = 'Ihr seht das ziemlich ähnlich.';
+                else if (pct >= 45) verdict = 'Teils gleiche Sicht, teils andere Meinung.';
+                else                verdict = 'Der Algorithmus sieht das ganz anders als du.';
+                document.getElementById('rcVerdict').textContent = verdict;
+
+                // In die Reihenfolge des Algorithmus sortieren (mit FLIP-Animation)
+                var oldTops = snap(cs);
+                cs.sort(function (a, b) {
+                    return a.getAttribute('data-true-rank') - b.getAttribute('data-true-rank');
+                });
+                cs.forEach(function (c) { list.appendChild(c); });
+                flip(cs, oldTops);
+
+                list.classList.add('rc-revealed');
+                document.getElementById('rcResult').classList.add('rc-show');
+                btn.disabled = true;
+                btn.textContent = 'So sieht es der Algorithmus';
+                updatePositions();
+            });
+        })();
+        </script>
+        {% endif %}
+
         <script>
         function bonusScroll(dir) {
             var scroller = document.getElementById('bonusScroller');
