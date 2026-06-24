@@ -515,12 +515,14 @@ licht_panel.place(x=24, y=24, anchor="nw")
 
 def _on_licht_neustart():
     stop_idle()
+    _exit_mapping_ui()
     start_lichterkette()
     _flash_text(neustart_btn, "Animation neu gestartet ✓")
 
 
 def _on_licht_aus():
     stop_idle()
+    _exit_mapping_ui()
     stop_lichterkette()
     _flash_text(licht_aus_btn, "Kette ausgeschaltet ✓")
 
@@ -538,16 +540,13 @@ mapping_f, mapping_btn = _make_chip_button(
 mapping_f.pack(anchor="nw", pady=(8, 0))
 
 
-def _idle_state_changed(active):
-    idle_btn.config(text="✕  Tag/Nacht beenden" if active else "🌙  Tag/Nacht (Idle)")
-
-
 def _on_idle_toggle():
     if _idle_active:
         stop_idle()
         stop_lichterkette()      # Kette ausschalten
         status_label.config(text="Idle-Modus beendet.")
     else:
+        _exit_mapping_ui()
         start_idle()
         status_label.config(text="Idle-Modus: Tag/Nacht-Weltkarte aktiv.")
 
@@ -555,10 +554,6 @@ def _on_idle_toggle():
 idle_f, idle_btn = _make_chip_button(
     licht_panel, "🌙  Tag/Nacht (Idle)", _on_idle_toggle)
 idle_f.pack(anchor="nw", pady=(8, 0))
-
-# UI über Zustandswechsel des Idle-Modus informieren (auch wenn er von
-# außen – z. B. durch einen QR-Scan – beendet wird).
-_idle_on_change = _idle_state_changed
 
 
 # ── Steuer-Panel: Farben + Animation ────────────────────────────
@@ -1026,11 +1021,17 @@ m_entry.bind("<FocusIn>", _ac_show)
 m_entry.bind("<FocusOut>", lambda e: m_entry.after(150, _ac_close))
 
 
-def _toggle_mapping_mode():
+def _exit_mapping_ui():
+    """Blendet das Mapping-Panel aus – ohne die Kette zu stoppen (wird von anderen Modi übernommen)."""
     if _mapping_aktiv[0]:
         _mapping_aktiv[0] = False
         mapping_card.pack_forget()
         mapping_btn.config(text="⊞  LED-Mapping")
+
+
+def _toggle_mapping_mode():
+    if _mapping_aktiv[0]:
+        _exit_mapping_ui()
         stop_lichterkette()
     else:
         stop_idle()
@@ -1062,6 +1063,7 @@ def on_qr_detected(data):
     last_session_id = session_id
 
     stop_idle()   # Ranking hat Vorrang vor dem Idle-Modus
+    _exit_mapping_ui()
 
     if base_url:
         # Ranking vom Backend holen → Städte → LED-Positionen → ESP32
