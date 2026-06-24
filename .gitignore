@@ -4,3 +4,4 @@ database.db
 *.pyc
 .DS_Store
 .claude/
+esp32_firmware/wifi_config.py

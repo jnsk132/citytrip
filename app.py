@@ -308,6 +308,23 @@ def results_by_id(session_id):
                            challenge=challenge)
 
 
+@app.route("/api/led-ranking/<session_id>")
+def api_led_ranking(session_id):
+    """Ranking einer Session als JSON – für die ESP32-Lichterkette am Scanner.
+
+    Der Laptop-Scanner ruft das beim QR-Scan ab, übersetzt die Städte über
+    led_mapping.json in LED-Positionen und schickt sie an den ESP32.
+    """
+    rows = get_results(session_id)
+    if not rows:
+        return jsonify({"error": "unknown session"}), 404
+    ranking = [
+        {"rank": rank, "city": city, "country": country, "score": score}
+        for rank, city, country, score in rows
+    ]
+    return jsonify({"session_id": session_id, "ranking": ranking})
+
+
 def _load_session_cities(sid):
     rows = get_results(sid)
     if not rows:
