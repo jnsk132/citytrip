@@ -1,3 +1,4 @@
+import csv
 import cv2
 import tkinter as tk
 from tkinter import font as tkfont
@@ -6,11 +7,11 @@ from PIL import Image, ImageTk, ImageDraw
 import os
 import json
 import random
+import sqlite3
+import sys
 import threading
 import time
 import unicodedata
-import urllib.request
-import urllib.error
 import urllib.parse
 
 try:
@@ -23,6 +24,7 @@ except ImportError:
           "Installation: pip install pyserial")
 
 from tag_nacht import build_frame, set_idle_farben, get_idle_farben
+import wetter_idle
 
 
 # ════════════════════════════════════════════════════════════════
@@ -31,11 +33,12 @@ from tag_nacht import build_frame, set_idle_farben, get_idle_farben
 
 SERIAL_BAUD     = 115200
 SERIAL_TIMEOUT  = 5       # Sekunden Wartezeit auf Antwort
-HTTP_TIMEOUT    = 3       # Timeout für den Ranking-Abruf vom Flask-Backend
 # Fester Port (z. B. "/dev/cu.usbmodem1101" oder "COM5"). None = alle Ports scannen.
 SERIAL_PORT          = None
 SERIAL_PROBE_WINDOW  = 8     # Sekunden pro Port: gibt dem ESP nach dem Öffnen Zeit zu booten
 SERIAL_PING_INTERVAL = 0.5   # in diesem Takt wird während des Wartens neu gepingt
+SCAN_COOLDOWN_SEC    = 10    # Sekunden Sperre nach einem erkannten QR-Code
+FADEOUT_DAUER_SEC    = 0.7   # muss zur Fadeout-Dauer in der ESP32-Firmware passen
 # Antworten des ESP32 beginnen mit diesem Präfix (trennt JSON von Debug-Prints).
 _SERIAL_PREFIX  = b">>>"
 
@@ -44,7 +47,7 @@ _serial_lock    = threading.Lock()
 
 # Steuerzustand der Lichterkette (wird von der UI gesetzt, an den ESP32 geschickt).
 LICHT_STATE = {
-    "start_rgb": (255, 255, 50),
+    "start_rgb": (0, 255, 0),
     "mid_rgb":   (255, 130, 0),
     "end_rgb":   (255, 0,   0),
     "animation": True,
@@ -229,15 +232,20 @@ def stop_lichterkette():
 IDLE_LED_COUNT = 150           # physische Länge der Kette (LED 0..149)
 IDLE_REFRESH_SEC = 60         # wie oft der Sonnenstand neu berechnet wird
 
+WETTER_REFRESH_SEC = 600       # Wetterdaten alle 10 Minuten neu abrufen
+WETTER_FRAME_SEC   = 0.1       # Animations-Takt der Wetterkarte (~10 fps)
+
 _idle_stop = threading.Event()
 _idle_active = False
+_idle_mode = None             # "tag_nacht" | "wetter" | None (welcher Idle läuft)
 _idle_thread = None           # laufender Idle-Worker (zum sauberen Beenden)
 _idle_on_change = None        # optionaler UI-Callback: fn(active: bool)
 
 
-def _idle_notify(active):
-    global _idle_active
+def _idle_notify(active, mode=None):
+    global _idle_active, _idle_mode
     _idle_active = active
+    _idle_mode = mode if active else None
     if _idle_on_change:
         _idle_on_change(active)
 
@@ -257,7 +265,7 @@ def start_idle():
     global _idle_thread
     stop_idle()                # evtl. laufenden Loop sauber beenden
     _idle_stop.clear()
-    _idle_notify(True)
+    _idle_notify(True, "tag_nacht")
 
     def worker():
         first = True
@@ -274,6 +282,67 @@ def start_idle():
                       else "[Idle] ESP32 nicht erreichbar.")
                 first = False
             _idle_stop.wait(IDLE_REFRESH_SEC)
+
+    _idle_thread = threading.Thread(target=worker, daemon=True)
+    _idle_thread.start()
+
+
+def start_wetter_idle():
+    """Startet den Wetter-Idle-Modus (im Hintergrund).
+
+    Der Wetterabruf (Open-Meteo) ist langsam und läuft daher nur alle
+    WETTER_REFRESH_SEC in einem eigenen kurzen Thread, damit die Animation
+    nie hängt. Die Frames werden im WETTER_FRAME_SEC-Takt gerechnet und
+    gesendet – so pulsieren/blitzen/glitzern die LEDs flüssig.
+    """
+    global _idle_thread
+    stop_idle()                # evtl. laufenden Loop sauber beenden
+    _idle_stop.clear()
+    _idle_notify(True, "wetter")
+
+    def worker():
+        t0 = time.monotonic()
+        box = {"kategorien": {}}      # aktueller Stand LED -> Wetterkategorie
+        box_lock = threading.Lock()
+        fetch_laeuft = {"v": False}
+        gemeldet = {"v": False}
+
+        def _refetch():
+            neu = wetter_idle.kategorien_by_led(IDLE_LED_COUNT)
+            with box_lock:
+                if neu:
+                    box["kategorien"] = neu
+            if not gemeldet["v"]:
+                print("[Idle] Wetter-Weltkarte aktiv." if neu
+                      else "[Idle] Kein Wetter/Mapping verfügbar.")
+                gemeldet["v"] = True
+            fetch_laeuft["v"] = False
+
+        naechster_abruf = 0.0
+        while not _idle_stop.is_set():
+            now = time.monotonic()
+            if now >= naechster_abruf and not fetch_laeuft["v"]:
+                fetch_laeuft["v"] = True
+                naechster_abruf = now + WETTER_REFRESH_SEC
+                threading.Thread(target=_refetch, daemon=True).start()
+
+            with box_lock:
+                kategorien = box["kategorien"]
+
+            frame = wetter_idle.build_frame(IDLE_LED_COUNT, kategorien,
+                                            now - t0)
+            pixels = [[0, 0, 0] for _ in range(IDLE_LED_COUNT)]
+            for led, rgb in frame.items():
+                if 0 <= led < IDLE_LED_COUNT:
+                    pixels[led] = list(rgb)
+
+            # Zwischen Bauen und Senden kann der Stop gekommen sein – dann
+            # keinen Frame mehr rausschicken (sonst leuchtet die Kette trotz
+            # "ausschalten" wieder auf).
+            if _idle_stop.is_set():
+                break
+            _esp_request("/frame", {"pixels": pixels})
+            _idle_stop.wait(WETTER_FRAME_SEC)
 
     _idle_thread = threading.Thread(target=worker, daemon=True)
     _idle_thread.start()
@@ -344,10 +413,20 @@ def _speichere_mapping_komplett(mapping):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _get_mapping_color():
+    """Liest die aktuell gewählte Mapping-Farbe aus den UI-Feldern."""
+    try:
+        entries, _ = _mapping_color_store["farbe"]
+        return [max(0, min(255, int(en.get()))) for en in entries]
+    except (ValueError, KeyError):
+        return [255, 255, 255]
+
+
 def _stream_single_led(index):
     """Lässt genau LED <index> am ESP32 aufleuchten (Mapping-Modus)."""
     def worker():
-        ok = _esp_request(f"/led/{index}")
+        rgb = _get_mapping_color()
+        ok = _esp_request(f"/led/{index}", {"rgb": rgb})
         print(f"[ESP32] LED {index} leuchtet." if ok else f"[ESP32] Single-LED fehlgeschlagen.")
     threading.Thread(target=worker, daemon=True).start()
 
@@ -364,63 +443,94 @@ def _city_to_led_indices():
     return out
 
 
-def _fetch_ranking(base_url, session_id):
-    """Holt das Ranking der Session vom Flask-Backend. Städte (bestes zuerst) oder None."""
-    url = f"{base_url}/api/led-ranking/{session_id}"
+# ════════════════════════════════════════════════════════════════
+#  Scoring: Städte-CSV + Algorithmus aus functions.py importieren
+# ════════════════════════════════════════════════════════════════
+_PROJ_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, _PROJ_DIR)
+from functions import build_user_from_swipes, calculate_user_preference, score_all_cities
+
+_CSV_PATH = os.path.join(_PROJ_DIR, "static", "worldcities_ranked_german.csv")
+try:
+    with open(_CSV_PATH, encoding="utf-8") as _f:
+        _rdr = csv.reader(_f)
+        next(_rdr)
+        _CITY_LIST = list(_rdr)
+    _CITY_MAP = {city[0]: city for city in _CITY_LIST}
+except Exception as _csv_err:
+    print(f"[Scoring] Städte-CSV nicht geladen: {_csv_err}")
+    _CITY_LIST = []
+    _CITY_MAP  = {}
+
+# Pfad zur SQLite-Datenbank (liegt eine Ebene über laptop_app/)
+_DB_PATH = os.path.join(_PROJ_DIR, "database.db")
+
+
+def _score_session_leds(session_id):
+    """Liest Swipes aus DB, berechnet Score für alle Karten-Städte.
+    Gibt (led_order, preview_namen, fehler) zurück."""
     try:
-        with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT) as r:
-            data = json.loads(r.read().decode())
-        ranking = data.get("ranking", [])
-        ranking.sort(key=lambda e: e.get("rank", 9999))   # sicherheitshalber nach Rang
-        return [e["city"] for e in ranking if e.get("city")]
+        con = sqlite3.connect(_DB_PATH)
+        cur = con.cursor()
+        cur.execute(
+            "SELECT iteration, city, country, continent, choice "
+            "FROM swipes WHERE session_id = ? ORDER BY iteration",
+            (session_id,),
+        )
+        swipes = cur.fetchall()
+        con.close()
     except Exception as e:
-        print(f"[Ranking] Abruf fehlgeschlagen: {e}")
-        return None
+        return None, None, str(e)
 
+    if not swipes:
+        return None, None, "Session nicht in DB oder keine Swipes"
 
-def _ranking_to_led_order(cities):
-    """Geordnete Städteliste -> geordnete LED-Indizes. Liefert (led_order, fehlende_staedte)."""
+    user   = build_user_from_swipes(swipes, _CITY_MAP)
+    prefs  = calculate_user_preference(user)
+    scored = score_all_cities(user, prefs, _CITY_LIST)  # beste zuerst
+
     city_leds = _city_to_led_indices()
-    led_order, fehlend = [], []
-    for city in cities:
-        idxs = city_leds.get(city.strip().lower())
+    led_order, preview = [], []
+    for _, city in scored:
+        idxs = city_leds.get(city[0].strip().lower())
         if idxs:
             led_order.extend(idxs)
-        else:
-            fehlend.append(city)
-    return led_order, fehlend
+            if len(preview) < 3:
+                preview.append(city[0])
+
+    if not led_order:
+        return None, None, "Keine Karten-Städte im Scoring"
+
+    return led_order, preview, None
 
 
-# Bereich für zufällige Test-Positionen, solange das LED-Mapping noch leer ist.
-# Volle Kettenlänge (LED 0..149).
-RANDOM_TEST_LEDS = 150
+def start_ranking_animation(session_id):
+    """Berechnet Scores für alle Karten-Städte und startet die Animation am ESP32."""
+    def _ui(text):
+        root.after(0, lambda t=text: status_label.config(text=t))
 
-
-def _random_led_order(count):
-    """Zufällige, eindeutige LED-Positionen (Rang-Reihenfolge) zum Testen ohne Mapping."""
-    n = min(count, RANDOM_TEST_LEDS)
-    return random.sample(range(RANDOM_TEST_LEDS), n)
-
-
-def start_ranking_animation(base_url, session_id):
-    """Holt Ranking, mappt es auf LED-Positionen und startet die Animation am ESP32.
-
-    Fällt auf die generische Animation zurück, wenn kein Ranking/Mapping da ist.
-    """
     def worker():
-        cities = _fetch_ranking(base_url, session_id)
-        if not cities:
-            print("[Ranking] Kein Ranking erhalten – generische Animation.")
-            start_lichterkette()
-            return
-        led_order, fehlend = _ranking_to_led_order(cities)
+        # 1) Sofort Fadeout auslösen – egal welche Animation gerade läuft.
+        fade_start = time.time()
+        _esp_request("/fadeout")
+
+        # 2) Scores berechnen (läuft, während die LEDs ausfaden).
+        _ui(f"Session {session_id[:8]} …  ·  Berechne Scores …")
+        led_order, preview, err = _score_session_leds(session_id)
         if not led_order:
-            # Mapping noch leer → Test mit zufälligen Positionen, Rang-Reihenfolge bleibt.
-            led_order = _random_led_order(len(cities))
-            print(f"[Ranking] Mapping leer – TEST mit {len(led_order)} zufälligen "
-                  f"LED-Positionen (Rang-Reihenfolge): {led_order}")
-        elif fehlend:
-            print(f"[Ranking] {len(fehlend)} Städte ohne LED-Mapping (übersprungen): {fehlend[:5]}")
+            _ui(f"Ranking nicht verfügbar  ·  {err}")
+            print(f"[Ranking] Fehler: {err}")
+            return
+
+        vorschau = "  ·  ".join(f"#{i+1} {c}" for i, c in enumerate(preview))
+        _ui(f"{len(led_order)} Karten-LEDs  ·  {vorschau}")
+
+        # 3) Warten, bis der Fadeout sichtbar durchgelaufen ist, bevor die
+        #    neue Animation startet (sonst killt /start den Fadeout sofort).
+        rest = FADEOUT_DAUER_SEC - (time.time() - fade_start)
+        if rest > 0:
+            time.sleep(rest)
+
         ok = _esp_request("/start", {
             "start_rgb": list(LICHT_STATE["start_rgb"]),
             "mid_rgb":   list(LICHT_STATE["mid_rgb"]),
@@ -428,7 +538,7 @@ def start_ranking_animation(base_url, session_id):
             "animation": LICHT_STATE["animation"],
             "leds":      led_order,
         })
-        print(f"[Ranking] {len(led_order)} LEDs nach Rang angesteuert."
+        print(f"[Ranking] {len(led_order)} LEDs angesteuert."
               if ok else "[Ranking] ESP32 nicht erreichbar.")
     threading.Thread(target=worker, daemon=True).start()
 
@@ -618,19 +728,35 @@ mapping_f.pack(anchor="nw", pady=(8, 0))
 
 
 def _on_idle_toggle():
-    if _idle_active:
+    if _idle_active and _idle_mode == "tag_nacht":
         stop_idle()
         stop_lichterkette()      # Kette ausschalten
         status_label.config(text="Idle-Modus beendet.")
     else:
         _exit_mapping_ui()
-        start_idle()
+        start_idle()             # stoppt vorher selbst einen evtl. Wetter-Idle
         status_label.config(text="Idle-Modus: Tag/Nacht-Weltkarte aktiv.")
 
 
 idle_f, idle_btn = _make_chip_button(
     licht_panel, "🌙  Tag/Nacht (Idle)", _on_idle_toggle)
 idle_f.pack(anchor="nw", pady=(8, 0))
+
+
+def _on_wetter_idle_toggle():
+    if _idle_active and _idle_mode == "wetter":
+        stop_idle()
+        stop_lichterkette()      # Kette ausschalten
+        status_label.config(text="Wetter-Idle beendet.")
+    else:
+        _exit_mapping_ui()
+        start_wetter_idle()      # stoppt vorher selbst einen evtl. Tag/Nacht-Idle
+        status_label.config(text="Idle-Modus: Wetter-Weltkarte aktiv …")
+
+
+wetter_idle_f, wetter_idle_btn = _make_chip_button(
+    licht_panel, "🌦  Wetter (Idle)", _on_wetter_idle_toggle)
+wetter_idle_f.pack(anchor="nw", pady=(8, 0))
 
 
 # ── Steuer-Panel: Farben + Animation ────────────────────────────
@@ -829,7 +955,12 @@ m_progress.pack(side="right")
 
 tk.Label(mapping_card,
          text="Navigiere durch die LEDs · jede LED leuchtet auf · weise ihr eine Stadt zu",
-         font=sub_font, fg=TEXT_DIM, bg=SURFACE).pack(anchor="w", padx=24, pady=(0, 14))
+         font=sub_font, fg=TEXT_DIM, bg=SURFACE).pack(anchor="w", padx=24, pady=(0, 8))
+
+# Mapping-Farbe (Farbe der aufleuchtenden LED)
+_mapping_color_store = {}
+_build_color_row("farbe", "LED-Farbe (Mapping)", (255, 255, 255),
+                 parent=mapping_card, store=_mapping_color_store)
 
 # Navigation
 m_nav_row = tk.Frame(mapping_card, bg=SURFACE)
@@ -1132,8 +1263,24 @@ m_entry.bind("<Up>", lambda e: _ac_move(-1))
 m_entry.bind("<Return>", _ac_accept)
 m_entry.bind("<Escape>", _ac_close)
 m_entry.bind("<FocusIn>", _ac_show)
-# Beim Verlassen kurz warten, damit ein Klick auf die Liste noch ankommt
-m_entry.bind("<FocusOut>", lambda e: m_entry.after(150, _ac_close))
+m_entry.bind("<Button-1>", lambda e: m_entry.focus_force(), add="+")
+
+
+def _on_entry_focus_out(event):
+    # Autocomplete kurz warten lassen, damit ein Klick auf die Liste ankommt
+    m_entry.after(150, _ac_close)
+    # Fokus zurückgeben, wenn er an ein nicht-interaktives Widget gegangen ist
+    if _mapping_aktiv[0]:
+        def _guard():
+            if not _mapping_aktiv[0]:
+                return
+            w = root.focus_get()
+            if w is None or isinstance(w, (tk.Frame, tk.Canvas, tk.Label)):
+                m_entry.focus_set()
+        m_entry.after(200, _guard)
+
+
+m_entry.bind("<FocusOut>", _on_entry_focus_out)
 
 
 def _exit_mapping_ui():
@@ -1155,46 +1302,48 @@ def _toggle_mapping_mode():
         mapping_btn.config(text="✕  Mapping beenden")
         _mapping_update_ui()
         _stream_single_led(_mapping_index[0])
+        m_entry.focus_set()
 
 
-last_session_id = None
+last_scan_time = 0.0
 detector = cv2.QRCodeDetector()
+
+# QR-Erkennung ist teuer (voller Frame). Sie läuft daher nicht in jedem
+# Kamera-Frame, sondern nur jeden N-ten – das entlastet den Tk-Mainthread
+# spürbar, ohne dass ein QR-Code übersehen wird (er bleibt mehrere Frames
+# lang im Bild).
+QR_DETECT_EVERY = 3
+CAM_REFRESH_MS  = 33   # ~30 fps statt 200 fps
+_frame_count = 0
 
 
 def on_qr_detected(data):
-    global last_session_id
+    global last_scan_time
 
-    # URL-Format: http://host/results/<uuid> → Host + UUID extrahieren
-    base_url = None
+    # URL-Format: http://host/results/<uuid> oder direkte UUID
     if data.startswith("http"):
-        parsed = urllib.parse.urlparse(data)
-        base_url = f"{parsed.scheme}://{parsed.netloc}"
         session_id = data.rstrip("/").split("/")[-1]
     else:
         session_id = data
 
-    if session_id == last_session_id:
+    if time.time() - last_scan_time < SCAN_COOLDOWN_SEC:
         return
-    last_session_id = session_id
+    last_scan_time = time.time()
 
-    stop_idle()   # Ranking hat Vorrang vor dem Idle-Modus
+    stop_idle()
     _exit_mapping_ui()
-
-    if base_url:
-        # Ranking vom Backend holen → Städte → LED-Positionen → ESP32
-        start_ranking_animation(base_url, session_id)
-        status_label.config(text=f"Session {session_id[:8]} …  ·  Ranking → Lichterkette")
-    else:
-        # Nur Session-ID ohne Host: kein Ranking abrufbar → generische Animation
-        start_lichterkette()
-        status_label.config(text=f"Session erkannt: {session_id[:8]} …  ·  Lichterkette gestartet.")
+    start_ranking_animation(session_id)   # löst zuerst den Fadeout aus, dann das Ranking
 
 
 def update():
+    global _frame_count
     _, frame = vid.read()
-    data, _, _ = detector.detectAndDecode(frame)
-    if data:
-        on_qr_detected(data)
+
+    _frame_count += 1
+    if _frame_count % QR_DETECT_EVERY == 0:
+        data, _, _ = detector.detectAndDecode(frame)
+        if data:
+            on_qr_detected(data)
 
     opencv_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
     captured_image = Image.fromarray(opencv_image)
@@ -1207,7 +1356,7 @@ def update():
     photo_image = ImageTk.PhotoImage(image=captured_image)
     cam_label.photo_image = photo_image
     cam_label.configure(image=photo_image)
-    cam_label.after(5, update)
+    cam_label.after(CAM_REFRESH_MS, update)
 
 
 update()

@@ -52,13 +52,13 @@ def alle_aus():
 
 # ── Ranking-Animation (async, cancellable) ───────────────────────
 async def run_animation():
-    START_PAUSE   = 0.10
-    END_PAUSE     = 0.0125
-    BASE_STOTTER  = 0.60
+    START_PAUSE   = 0.05
+    END_PAUSE     = 0.005
+    BASE_STOTTER  = 0.30
     STOTTER_DAUER = 0.40
     FADE_SCHRITTE = 20
-    HELL_MAX      = 1.0
-    HELL_MIN      = 0.30
+    HELL_MAX      = 0.5
+    HELL_MIN      = 0.20
     TOP_N         = 3
     PULS_PERIODE  = 1.6
     PULS_MIN      = 0.15
@@ -128,6 +128,36 @@ async def run_animation():
             t = (t + dt) % PULS_PERIODE
 
     except asyncio.CancelledError:
+        raise
+
+
+async def run_fadeout():
+    """Blendet alle aktiven LEDs mit zufälligen Geschwindigkeiten schnell aus."""
+    TOTAL_STEPS = 25
+    DELAY = 0.025  # 25 * 0.025 = ~0.6 s gesamt
+
+    # Zustand nach dem Cancel lesen (run_animation ruft kein alle_aus() mehr)
+    base = [(np[i][0], np[i][1], np[i][2]) for i in range(MAX_LEDS)]
+    # Jede LED startet das Ausblenden zu einem zufälligen Zeitpunkt
+    offsets = [random.randint(0, TOTAL_STEPS // 2) for _ in range(MAX_LEDS)]
+
+    try:
+        for step in range(TOTAL_STEPS + 1):
+            for i in range(MAX_LEDS):
+                r, g, b = base[i]
+                if r == 0 and g == 0 and b == 0:
+                    continue
+                s = offsets[i]
+                if step < s:
+                    continue
+                remaining = TOTAL_STEPS - s
+                progress = (step - s) / remaining if remaining > 0 else 1.0
+                factor = max(0.0, 1.0 - progress)
+                np[i] = (int(r * factor), int(g * factor), int(b * factor))
+            np.write()
+            await asyncio.sleep(DELAY)
+        alle_aus()
+    except asyncio.CancelledError:
         alle_aus()
         raise
 
@@ -178,17 +208,21 @@ async def _handle_command(path, incoming):
         alle_aus()
         return {"status": "ok", "action": "stop"}
 
+    elif path == "/fadeout":
+        await cancel_anim()
+        _anim_task = asyncio.create_task(run_fadeout())
+        return {"status": "ok", "action": "fadeout"}
+
     elif path.startswith("/led/"):
         try:
             idx = int(path.split("/")[-1])
         except ValueError:
             idx = 0
         await cancel_anim()
-        n = min(max(idx + 1, ANZ_LEDS), MAX_LEDS)
-        for i in range(n):
-            np[i] = (0, 0, 0)
+        rgb = incoming.get("rgb", [255, 255, 255])
+        alle_aus()
         if 0 <= idx < MAX_LEDS:
-            np[idx] = (255, 255, 255)
+            np[idx] = (int(rgb[1]), int(rgb[0]), int(rgb[2]))
         np.write()
         return {"status": "ok"}
 
@@ -272,10 +306,16 @@ async def serial_listener():
     poll.register(sys.stdin, uselect.POLLIN)
     buf = ""
     while True:
-        ready = poll.poll(0)
-        if ready:
-            try:
-                char = sys.stdin.read(1)
+        if poll.poll(0):
+            # Alle gerade verfügbaren Zeichen am Stück abholen, statt nur
+            # ein Zeichen pro 10-ms-Tick. Sonst läuft das Einlesen eines
+            # großen Befehls (z. B. /frame mit 150 Pixeln) in den Bereich
+            # von Sekunden und der Laptop läuft ins Timeout.
+            while poll.poll(0):
+                try:
+                    char = sys.stdin.read(1)
+                except Exception:
+                    break
                 if char in ("\n", "\r"):
                     line = buf.strip()
                     buf = ""
@@ -293,9 +333,7 @@ async def serial_listener():
                         sys.stdout.write('>>>{"error":"parse_error"}\n')
                 else:
                     buf += char
-            except Exception:
-                pass
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.005)
 
 
 # ── WLAN-Verbindung ───────────────────────────────────────────────
