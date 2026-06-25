@@ -6,6 +6,7 @@ import neopixel
 import math
 import random
 import sys
+import time
 import uselect
 
 try:
@@ -19,6 +20,12 @@ GPIO_PIN = 5
 ANZ_LEDS = 150  # LEDs für die Ranking-Animation (Fallback ohne Mapping)
 MAX_LEDS = 150  # physische Streifenlänge (LED 0..149)
 
+# Ziel-Framerate der Wetter-Idle-Animation. Höher = flüssiger, aber mehr
+# CPU-Last auf dem C3. Schafft der ESP die Rechnung pro Frame nicht in der
+# Zeit, läuft die Animation einfach etwas langsamer, aber immer gleichmäßig
+# (nie ruckelig). 20-30 sind ein guter Bereich.
+WETTER_FPS = 60
+
 # ── Animation-Defaults (werden via /start überschrieben) ────────
 _state = {
     "start_rgb": [255, 255, 50],
@@ -30,6 +37,7 @@ _state = {
 
 np = neopixel.NeoPixel(machine.Pin(GPIO_PIN, machine.Pin.OUT), MAX_LEDS)
 _anim_task = None
+_wetter_task = None           # laufende Wetter-Animation (oder None)
 
 
 def _grad(s, m, e, t):
@@ -163,7 +171,14 @@ async def run_fadeout():
 
 
 async def cancel_anim():
-    global _anim_task
+    global _anim_task, _wetter_task
+    if _wetter_task is not None:
+        _wetter_task.cancel()
+        try:
+            await _wetter_task
+        except asyncio.CancelledError:
+            pass
+        _wetter_task = None
     if _anim_task is not None:
         _anim_task.cancel()
         try:
@@ -173,10 +188,139 @@ async def cancel_anim():
         _anim_task = None
 
 
+# ── Wetter-Idle-Animation (läuft komplett auf dem ESP) ────────────
+# Der Laptop schickt nur die Wetterkategorie je LED (alle paar Minuten);
+# die zeitabhängige Animation rechnet der ESP selbst mit eigener Uhr und
+# gleichmäßiger Framerate – dadurch flüssig, ohne Serial im Hot-Loop.
+#
+# Logik gespiegelt aus laptop_app/wetter_idle.py. Kategorie-Codes:
+#   0=wolken/unbekannt  1=klar  2=regen  3=schnee  4=gewitter  5=nacht  9=aus
+# Code 5 (Nacht) setzt der Laptop dort, wo die Sonne unter dem Horizont steht
+# UND es klar oder bewölkt wäre – Regen/Schnee/Gewitter zeigt er auch nachts.
+W_WOLKEN, W_KLAR, W_REGEN, W_SCHNEE, W_GEWITTER, W_NACHT, W_AUS = 0, 1, 2, 3, 4, 5, 9
+
+# Farben in normalem RGB; der GRB-Tausch passiert erst beim Schreiben.
+WFARBE_REGEN  = (0,   0,   255)
+WFARBE_BLITZ  = (255, 240, 0)
+WFARBE_SCHNEE = (200, 220, 255)
+WFARBE_SONNE  = (255, 100, 0)
+WFARBE_WOLKEN = (40,  46,  64)
+WFARBE_NACHT  = (18,  4,   46)     # sehr dunkles Blau-Lila
+
+_TWO_PI = 2 * math.pi
+_wetter_codes = []            # Kategorie-Code je LED (Index = LED-Nr.)
+
+_w_blitz = {"ende": 0.0, "naechster": 0.0, "staerke": 0.0}
+
+
+def _w_scale(rgb, f):
+    if f < 0.0:
+        f = 0.0
+    elif f > 1.0:
+        f = 1.0
+    return (int(rgb[0] * f), int(rgb[1] * f), int(rgb[2] * f))
+
+
+def _w_lerp(c1, c2, t):
+    if t < 0.0:
+        t = 0.0
+    elif t > 1.0:
+        t = 1.0
+    return (int(c1[0] + (c2[0] - c1[0]) * t),
+            int(c1[1] + (c2[1] - c1[1]) * t),
+            int(c1[2] + (c2[2] - c1[2]) * t))
+
+
+def _w_jitter(led, salt=0):
+    """Deterministischer Pseudo-Zufall in [0,1) pro LED – jede LED bekommt
+    so ihre eigene Phase, statt synchron zu pulsieren."""
+    x = math.sin((led + 1) * 12.9898 + salt * 78.233) * 43758.5453
+    return x - math.floor(x)
+
+
+# Die Jitter-Werte hängen nur von LED+Salt ab und ändern sich nie –
+# einmal vorrechnen spart pro Frame hunderte sin()-Aufrufe auf dem ESP.
+_JIT0 = [_w_jitter(i, 0) for i in range(MAX_LEDS)]
+_JIT1 = [_w_jitter(i, 1) for i in range(MAX_LEDS)]
+_JIT2 = [_w_jitter(i, 2) for i in range(MAX_LEDS)]
+_JIT3 = [_w_jitter(i, 3) for i in range(MAX_LEDS)]
+_JIT4 = [_w_jitter(i, 4) for i in range(MAX_LEDS)]
+_W_PERIODE_SCHNEE = [2.0 + 2.5 * _JIT2[i] for i in range(MAX_LEDS)]
+
+
+def _w_blitz_level(t):
+    """Globaler Blitz-Pegel 0..1 für Gewitter-LEDs: meist 0, in zufälligen
+    Abständen ein kurzer harter Ausschlag mit leichtem Flackern."""
+    if t >= _w_blitz["naechster"]:
+        _w_blitz["ende"]      = t + random.uniform(0.08, 0.20)
+        _w_blitz["naechster"] = t + random.uniform(1.5, 5.0)
+        _w_blitz["staerke"]   = random.uniform(0.7, 1.0)
+    if t < _w_blitz["ende"]:
+        return _w_blitz["staerke"] * random.uniform(0.6, 1.0)
+    return 0.0
+
+
+def _w_farbe(led, code, t, blitz):
+    if code == W_REGEN:
+        phase = 0.5 + 0.5 * math.sin(_TWO_PI * (t / 1.2 + _JIT0[led]))
+        return _w_scale(WFARBE_REGEN, 0.35 + 0.65 * phase)
+
+    if code == W_GEWITTER:
+        phase = 0.5 + 0.5 * math.sin(_TWO_PI * (t / 1.0 + _JIT0[led]))
+        rgb = _w_scale(WFARBE_REGEN, 0.25 + 0.45 * phase)
+        if blitz > 0:
+            rgb = _w_lerp(rgb, WFARBE_BLITZ, blitz)
+        return rgb
+
+    if code == W_SCHNEE:
+        periode = _W_PERIODE_SCHNEE[led]
+        phase = 0.5 + 0.5 * math.sin(_TWO_PI * (t / periode + _JIT1[led]))
+        return _w_scale(WFARBE_SCHNEE, 0.12 + 0.88 * (phase * phase))
+
+    if code == W_KLAR:
+        phase = 0.5 + 0.5 * math.sin(_TWO_PI * (t / 4.0))
+        return _w_scale(WFARBE_SONNE, 0.55 + 0.45 * phase)
+
+    if code == W_NACHT:
+        # Sehr ruhiges, langsames Atmen im dunklen Blau-Lila
+        phase = 0.5 + 0.5 * math.sin(_TWO_PI * (t / 8.0 + _JIT4[led]))
+        return _w_scale(WFARBE_NACHT, 0.6 + 0.4 * phase)
+
+    # WOLKEN / unbekannt: schwaches Schimmern
+    phase = 0.5 + 0.5 * math.sin(_TWO_PI * (t / 6.0 + _JIT3[led]))
+    return _w_scale(WFARBE_WOLKEN, 0.55 + 0.45 * phase)
+
+
+async def run_wetter():
+    """Animiert die Wetter-Weltkarte fortlaufend aus _wetter_codes."""
+    frame_ms = max(1, int(1000 / WETTER_FPS))
+    try:
+        t0 = time.ticks_ms()
+        while True:
+            t = time.ticks_diff(time.ticks_ms(), t0) / 1000.0
+            blitz = _w_blitz_level(t)
+            codes = _wetter_codes
+            n = len(codes)
+            for i in range(MAX_LEDS):
+                code = codes[i] if i < n else W_AUS
+                if code == W_AUS:
+                    np[i] = (0, 0, 0)
+                else:
+                    r, g, b = _w_farbe(i, code, t, blitz)
+                    np[i] = (g, r, b)        # GRB-Reihenfolge des Streifens
+            np.write()
+            # Takt aus WETTER_FPS; bei langsamerer Rechnung läuft die
+            # Animation eben gemächlicher, aber gleichmäßig – nie ruckelig.
+            await asyncio.sleep_ms(frame_ms)
+    except asyncio.CancelledError:
+        alle_aus()
+        raise
+
+
 # ── Gemeinsame Befehls-Logik (HTTP + Serial) ─────────────────────
 async def _handle_command(path, incoming):
     """Führt einen Befehl aus und gibt das Antwort-Dict zurück."""
-    global _anim_task
+    global _anim_task, _wetter_task, _wetter_codes
 
     if path == "/ping":
         return {"status": "ok", "pong": True}
@@ -202,6 +346,17 @@ async def _handle_command(path, incoming):
                 np[i] = (0, 0, 0)
         np.write()
         return {"status": "ok", "action": "frame"}
+
+    elif path == "/wetter":
+        # Wetter-Idle: nur die Kategorien je LED kommen vom Laptop, der ESP
+        # animiert selbst. Läuft die Animation schon, werden bloß die
+        # Kategorien aktualisiert – so läuft die Zeit-Phase nahtlos weiter.
+        codes = incoming.get("codes") or []
+        _wetter_codes = codes
+        if _wetter_task is None:
+            await cancel_anim()
+            _wetter_task = asyncio.create_task(run_wetter())
+        return {"status": "ok", "action": "wetter"}
 
     elif path == "/stop":
         await cancel_anim()

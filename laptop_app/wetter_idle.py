@@ -27,6 +27,7 @@ import ssl
 import urllib.request
 
 from city_coords import CITY_COORDS
+from tag_nacht import sonnen_elevation
 
 # SSL-Context mit gueltigem CA-Bundle. Auf macOS bringt das Python.org-Build
 # oft keine System-Zertifikate mit ("CERTIFICATE_VERIFY_FAILED") – certifi
@@ -49,19 +50,27 @@ WOLKEN   = "wolken"
 REGEN    = "regen"
 SCHNEE   = "schnee"
 GEWITTER = "gewitter"
+NACHT    = "nacht"        # klar/bewoelkt, aber Sonne unter dem Horizont
+
+# Steht die Sonne tiefer als dieser Hoehenwinkel (Grad), gilt es als Nacht.
+# -6 entspricht dem Ende der buergerlichen Daemmerung (es wird wirklich dunkel).
+NACHT_ELEV = -6.0
 
 # ── Farben (normales RGB; der GRB-Tausch passiert erst am ESP32) ──
 FARBE_REGEN    = (0,  0,  255)    # kraeftiges Blau
-FARBE_BLITZ    = (255, 240, 180)    # gelb-weisser Blitz
+FARBE_BLITZ    = (255, 240, 0)    # gelb-weisser Blitz
 FARBE_SCHNEE   = (200, 220, 255)    # kuehles Weiss
 FARBE_SONNE    = (255, 100, 0)     # warmes Gelb
 FARBE_WOLKEN   = (40,  46,  64)     # gedimmtes Blaugrau
+FARBE_NACHT    = (18,  4,   46)     # sehr dunkles Blau-Lila
 
 _OPEN_METEO = "https://api.open-meteo.com/v1/forecast"
 
-# Letzter gueltiger Stand (LED -> Kategorie). Wird bei Netzfehlern als
-# Rueckfall genutzt, damit die Karte nicht ausgeht.
-_cache = {"kategorien": {}}
+# Letzter gueltiger Stand des ROHEN Wetters (Stadt -> Kategorie, ohne
+# Nacht-Ueberlagerung). Wird bei Netzfehlern als Rueckfall genutzt, damit die
+# Karte nicht ausgeht. Roh, weil die Nacht-Grenze sich schneller bewegt als
+# das Wetter und bei jedem Aufruf frisch berechnet wird.
+_cache = {"wetter": {}}
 
 # Zustand der Blitz-Animation (Gewitter). Globaler Blitz ueber die
 # Gewitter-LEDs, in zufaelligen Abstaenden, mit kurzem Flackern.
@@ -151,12 +160,21 @@ def _fetch_wetter(coords):
     return out
 
 
+def _ist_nacht(coords):
+    """True, wenn an (lat, lon) die Sonne aktuell unter NACHT_ELEV steht."""
+    return sonnen_elevation(coords[0], coords[1]) < NACHT_ELEV
+
+
 def kategorien_by_led(led_count):
     """Ruft das Wetter ab und liefert {led_index: kategorie}.
 
-    Bei Netzfehlern wird der letzte gute Stand beibehalten (oder, falls es
-    noch keinen gibt, alles als 'wolken' dargestellt). Der Aufruf-Takt
-    (z. B. alle 10 Minuten) wird vom Aufrufer bestimmt.
+    Wo es gerade Nacht ist, wird 'klar'/'wolken' zu 'nacht' (dunkles
+    Blau-Lila); Regen/Schnee/Gewitter bleiben auch nachts sichtbar.
+
+    Bei Netzfehlern wird der letzte gute Wetterstand beibehalten (oder, falls
+    es noch keinen gibt, alles als 'wolken'); die Nacht-Grenze wird trotzdem
+    frisch gerechnet. Der Aufruf-Takt (z. B. alle 10 Minuten) wird vom
+    Aufrufer bestimmt.
     """
     led_city = _led_city_map(led_count)
     if not led_city:
@@ -170,13 +188,21 @@ def kategorien_by_led(led_count):
 
     wetter = _fetch_wetter(coords)
     if wetter is None:                       # Netzfehler
-        if _cache["kategorien"]:
-            return _cache["kategorien"]      # alten Stand behalten
-        wetter = {city: WOLKEN for city in coords}
+        wetter = dict(_cache["wetter"]) if _cache["wetter"] \
+            else {city: WOLKEN for city in coords}
+    else:
+        _cache["wetter"] = wetter            # rohen Stand merken
 
-    by_led = {led: wetter.get(city, WOLKEN) for led, city in led_city.items()}
-    _cache["kategorien"] = by_led
-    return by_led
+    # Nacht-Ueberlagerung pro Stadt (frisch, da der Terminator wandert)
+    by_city = {}
+    for city, kat in wetter.items():
+        if kat in (KLAR, WOLKEN):
+            c = coords.get(city)
+            if c and _ist_nacht(c):
+                kat = NACHT
+        by_city[city] = kat
+
+    return {led: by_city.get(city, WOLKEN) for led, city in led_city.items()}
 
 
 # ════════════════════════════════════════════════════════════════
@@ -237,6 +263,11 @@ def _farbe(led, kat, t, blitz):
         # Ruhiges, langsames Atmen (alle synchron), Periode ~4 s
         phase = 0.5 + 0.5 * math.sin(2 * math.pi * (t / 4.0))
         return _scale(FARBE_SONNE, 0.55 + 0.45 * phase)
+
+    if kat == NACHT:
+        # Sehr ruhiges, langsames Atmen im dunklen Blau-Lila, Periode ~8 s
+        phase = 0.5 + 0.5 * math.sin(2 * math.pi * (t / 8.0 + _jitter(led, 4)))
+        return _scale(FARBE_NACHT, 0.6 + 0.4 * phase)
 
     # WOLKEN / unbekannt: schwaches Schimmern
     phase = 0.5 + 0.5 * math.sin(2 * math.pi * (t / 6.0 + _jitter(led, 3)))
