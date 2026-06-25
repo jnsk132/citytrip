@@ -233,7 +233,18 @@ IDLE_LED_COUNT = 150           # physische Länge der Kette (LED 0..149)
 IDLE_REFRESH_SEC = 60         # wie oft der Sonnenstand neu berechnet wird
 
 WETTER_REFRESH_SEC = 600       # Wetterdaten alle 10 Minuten neu abrufen
-WETTER_FRAME_SEC   = 0.1       # Animations-Takt der Wetterkarte (~10 fps)
+
+# Wetterkategorie -> Code für die ESP-Firmware. Der ESP animiert selbst,
+# der Laptop schickt nur diese Codes (siehe /wetter in esp32_firmware/main.py).
+_WETTER_CODE = {
+    wetter_idle.WOLKEN:   0,
+    wetter_idle.KLAR:     1,
+    wetter_idle.REGEN:    2,
+    wetter_idle.SCHNEE:   3,
+    wetter_idle.GEWITTER: 4,
+    wetter_idle.NACHT:    5,
+}
+_WETTER_CODE_AUS = 9           # LED nicht gemappt / nicht sichtbar
 
 _idle_stop = threading.Event()
 _idle_active = False
@@ -288,12 +299,13 @@ def start_idle():
 
 
 def start_wetter_idle():
-    """Startet den Wetter-Idle-Modus (im Hintergrund).
+    """Startet den Wetter-Idle-Modus.
 
-    Der Wetterabruf (Open-Meteo) ist langsam und läuft daher nur alle
-    WETTER_REFRESH_SEC in einem eigenen kurzen Thread, damit die Animation
-    nie hängt. Die Frames werden im WETTER_FRAME_SEC-Takt gerechnet und
-    gesendet – so pulsieren/blitzen/glitzern die LEDs flüssig.
+    Die Animation läuft komplett auf dem ESP (siehe /wetter in
+    esp32_firmware/main.py): Der Laptop ruft nur alle WETTER_REFRESH_SEC das
+    Wetter ab und schickt die Kategorie je LED. Dadurch fällt das frühere
+    10-fps-Frame-Streaming über die serielle Leitung weg – die LEDs
+    pulsieren/blitzen/glitzern jetzt flüssig und gleichmäßig.
     """
     global _idle_thread
     stop_idle()                # evtl. laufenden Loop sauber beenden
@@ -301,48 +313,26 @@ def start_wetter_idle():
     _idle_notify(True, "wetter")
 
     def worker():
-        t0 = time.monotonic()
-        box = {"kategorien": {}}      # aktueller Stand LED -> Wetterkategorie
-        box_lock = threading.Lock()
-        fetch_laeuft = {"v": False}
         gemeldet = {"v": False}
+        while not _idle_stop.is_set():
+            kategorien = wetter_idle.kategorien_by_led(IDLE_LED_COUNT)
+            codes = [_WETTER_CODE_AUS] * IDLE_LED_COUNT
+            for led, kat in kategorien.items():
+                if 0 <= led < IDLE_LED_COUNT:
+                    codes[led] = _WETTER_CODE.get(kat, 0)
 
-        def _refetch():
-            neu = wetter_idle.kategorien_by_led(IDLE_LED_COUNT)
-            with box_lock:
-                if neu:
-                    box["kategorien"] = neu
             if not gemeldet["v"]:
-                print("[Idle] Wetter-Weltkarte aktiv." if neu
+                print("[Idle] Wetter-Weltkarte aktiv (ESP-Animation)." if kategorien
                       else "[Idle] Kein Wetter/Mapping verfügbar.")
                 gemeldet["v"] = True
-            fetch_laeuft["v"] = False
 
-        naechster_abruf = 0.0
-        while not _idle_stop.is_set():
-            now = time.monotonic()
-            if now >= naechster_abruf and not fetch_laeuft["v"]:
-                fetch_laeuft["v"] = True
-                naechster_abruf = now + WETTER_REFRESH_SEC
-                threading.Thread(target=_refetch, daemon=True).start()
-
-            with box_lock:
-                kategorien = box["kategorien"]
-
-            frame = wetter_idle.build_frame(IDLE_LED_COUNT, kategorien,
-                                            now - t0)
-            pixels = [[0, 0, 0] for _ in range(IDLE_LED_COUNT)]
-            for led, rgb in frame.items():
-                if 0 <= led < IDLE_LED_COUNT:
-                    pixels[led] = list(rgb)
-
-            # Zwischen Bauen und Senden kann der Stop gekommen sein – dann
-            # keinen Frame mehr rausschicken (sonst leuchtet die Kette trotz
+            # Zwischen Abruf und Senden kann der Stop gekommen sein – dann
+            # nichts mehr rausschicken (sonst leuchtet die Kette trotz
             # "ausschalten" wieder auf).
             if _idle_stop.is_set():
                 break
-            _esp_request("/frame", {"pixels": pixels})
-            _idle_stop.wait(WETTER_FRAME_SEC)
+            _esp_request("/wetter", {"codes": codes})
+            _idle_stop.wait(WETTER_REFRESH_SEC)
 
     _idle_thread = threading.Thread(target=worker, daemon=True)
     _idle_thread.start()
@@ -507,7 +497,7 @@ def _score_session_leds(session_id):
 def start_ranking_animation(session_id):
     """Berechnet Scores für alle Karten-Städte und startet die Animation am ESP32."""
     def _ui(text):
-        root.after(0, lambda t=text: status_label.config(text=t))
+        root.after(0, lambda t=text: status_var.set(t))
 
     def worker():
         # 1) Sofort Fadeout auslösen – egal welche Animation gerade läuft.
@@ -665,7 +655,10 @@ accent_bar.image = accent_img
 accent_bar.pack(pady=(8, 0))
 
 # ── Status-Chip ─────────────────────────────────────────────────
-status_label = tk.Label(main, text="QR-Code vor die Kamera halten …",
+# Gemeinsame Statuszeile für Debug- und Präsentations-UI: Beide Labels
+# hängen an derselben StringVar und bleiben dadurch automatisch synchron.
+status_var = tk.StringVar(value="QR-Code vor die Kamera halten …")
+status_label = tk.Label(main, textvariable=status_var,
                         font=status_font, fg=TEXT_DIM, bg=SURFACE,
                         padx=18, pady=8)
 status_label.pack(pady=(22, 8))
@@ -731,11 +724,11 @@ def _on_idle_toggle():
     if _idle_active and _idle_mode == "tag_nacht":
         stop_idle()
         stop_lichterkette()      # Kette ausschalten
-        status_label.config(text="Idle-Modus beendet.")
+        status_var.set("Idle-Modus beendet.")
     else:
         _exit_mapping_ui()
         start_idle()             # stoppt vorher selbst einen evtl. Wetter-Idle
-        status_label.config(text="Idle-Modus: Tag/Nacht-Weltkarte aktiv.")
+        status_var.set("Idle-Modus: Tag/Nacht-Weltkarte aktiv.")
 
 
 idle_f, idle_btn = _make_chip_button(
@@ -747,16 +740,26 @@ def _on_wetter_idle_toggle():
     if _idle_active and _idle_mode == "wetter":
         stop_idle()
         stop_lichterkette()      # Kette ausschalten
-        status_label.config(text="Wetter-Idle beendet.")
+        _camera_set(True)        # Kamera wieder einschalten
+        status_var.set("Wetter-Idle beendet.")
     else:
         _exit_mapping_ui()
         start_wetter_idle()      # stoppt vorher selbst einen evtl. Tag/Nacht-Idle
-        status_label.config(text="Idle-Modus: Wetter-Weltkarte aktiv …")
+        _camera_set(False)       # Kamera im Wettermodus aus
+        status_var.set("Idle-Modus: Wetter-Weltkarte aktiv …")
 
 
 wetter_idle_f, wetter_idle_btn = _make_chip_button(
     licht_panel, "🌦  Wetter (Idle)", _on_wetter_idle_toggle)
 wetter_idle_f.pack(anchor="nw", pady=(8, 0))
+
+praesi_f, praesi_btn = _make_chip_button(
+    licht_panel, "🖥  Präsentations-UI", lambda: _show_presentation())
+praesi_f.pack(anchor="nw", pady=(8, 0))
+
+cam_toggle_f, cam_toggle_btn = _make_chip_button(
+    licht_panel, "📷  Kamera aus", lambda: _camera_set(not _cam_on[0]))
+cam_toggle_f.pack(anchor="nw", pady=(8, 0))
 
 
 # ── Steuer-Panel: Farben + Animation ────────────────────────────
@@ -831,7 +834,7 @@ def _read_color_entries():
                 max(0, min(255, int(en.get()))) for en in entries)
         return True
     except ValueError:
-        status_label.config(text="Ungültige Farbe – bitte ganze Zahlen 0–255 eingeben.")
+        status_var.set("Ungültige Farbe – bitte ganze Zahlen 0–255 eingeben.")
         return False
 
 
@@ -844,7 +847,7 @@ def _on_uebernehmen():
     if not _read_color_entries():
         return
     start_lichterkette()
-    status_label.config(text="Farben übernommen · Animation neu gestartet.")
+    status_var.set("Farben übernommen · Animation neu gestartet.")
 
 
 def _on_toggle_animation():
@@ -913,7 +916,7 @@ def _read_idle_entries():
                         nacht=farben["nacht"], helligkeit=hell)
         return True
     except ValueError:
-        status_label.config(text="Ungültige Idle-Farbe – bitte ganze Zahlen eingeben.")
+        status_var.set("Ungültige Idle-Farbe – bitte ganze Zahlen eingeben.")
         return False
 
 
@@ -922,9 +925,9 @@ def _on_idle_farben_uebernehmen():
         return
     if _idle_active:
         start_idle()      # Loop neu starten -> sofort Frame mit neuen Farben
-        status_label.config(text="Idle-Farben übernommen · Tag/Nacht läuft.")
+        status_var.set("Idle-Farben übernommen · Tag/Nacht läuft.")
     else:
-        status_label.config(text="Idle-Farben gespeichert · beim nächsten Idle-Start aktiv.")
+        status_var.set("Idle-Farben gespeichert · beim nächsten Idle-Start aktiv.")
 
 
 idle_action_row = tk.Frame(idle_card, bg=SURFACE)
@@ -1305,6 +1308,235 @@ def _toggle_mapping_mode():
         m_entry.focus_set()
 
 
+# ════════════════════════════════════════════════════════════════
+#  Präsentations-UI: cleanes Vollbild für die Messe
+#  Kamera mittig, QR-Code links daneben, unten die wichtigsten
+#  Aktionen. Über "Debug Mode" geht es zur ausführlichen UI zurück,
+#  von dort über "Präsentations-UI" wieder hierher.
+# ════════════════════════════════════════════════════════════════
+CAM_PRES_WIDTH = 520           # Kamera-Breite in der Präsentations-UI
+QR_PRES_SIZE   = 380           # max. Kantenlänge des QR-Code-Bildes
+QR_IMAGE_PATH  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qr-code.png")
+
+_ui_mode = ["debug"]           # aktueller Screen: "debug" | "presentation"
+
+pres_brand_font  = tkfont.Font(family="Helvetica", size=44, weight="bold")
+pres_wetter_font = tkfont.Font(family="Helvetica", size=72, weight="bold")
+pres_status_font = tkfont.Font(family="Helvetica", size=15)
+pres_btn_font    = tkfont.Font(family="Helvetica", size=15)
+
+
+def _make_pres_button(parent, text, command, accent=BRAND_MID):
+    """Größerer Chip-Button im Sunset-Stil für die Präsentations-UI."""
+    frame = tk.Frame(parent, bg=accent, bd=0)
+    btn = tk.Label(frame, text=text, font=pres_btn_font, fg=TEXT, bg=SURFACE,
+                   padx=26, pady=14, cursor="hand2")
+    btn.pack(padx=2, pady=2)
+    btn.bind("<Button-1>", lambda e: command())
+    btn.bind("<Enter>", lambda e: btn.config(bg=SURFACE_2, fg=GOLD))
+    btn.bind("<Leave>", lambda e: btn.config(bg=SURFACE, fg=TEXT))
+    return frame, btn
+
+
+# Vollbild-Frame (zunächst versteckt; via _show_presentation eingeblendet)
+presentation = tk.Frame(root, bg=BG)
+
+# Aurora-Hintergrund auch hier (gespiegelt aus der Debug-UI)
+pres_bg = tk.Canvas(presentation, bg=BG, highlightthickness=0, bd=0)
+pres_bg.place(x=0, y=0, relwidth=1, relheight=1)
+for gx, gy, gsize, gcol, ga in [
+    (-0.10, -0.12, 0.55, _hex_to_rgb(BRAND_1), 60),
+    (0.78,   0.16, 0.50, _hex_to_rgb(BRAND_2), 48),
+    (0.12,   0.70, 0.52, (88, 60, 255),        34),
+]:
+    s = int(min(screen_width, screen_height) * gsize * 2)
+    glow = ImageTk.PhotoImage(make_radial_glow(s, gcol, ga))
+    _glow_refs.append(glow)
+    pres_bg.create_image(int(gx * screen_width), int(gy * screen_height),
+                         image=glow, anchor="nw")
+
+# Kopf: Marke + Status (gleiche StringVar wie im Debug-Modus)
+pres_header = tk.Frame(presentation, bg=BG)
+pres_header.place(relx=0.5, y=40, anchor="n")
+tk.Label(pres_header, text="CityTrip", font=pres_brand_font,
+         fg=TEXT, bg=BG).pack()
+_pres_accent = make_gradient(220, 6, GRAD_STOPS)
+_pres_accent_bar = tk.Label(pres_header, image=_pres_accent, bg=BG, bd=0)
+_pres_accent_bar.image = _pres_accent
+_pres_accent_bar.pack(pady=(10, 0))
+pres_status_label = tk.Label(pres_header, textvariable=status_var,
+                             font=pres_status_font, fg=TEXT_DIM, bg=SURFACE,
+                             padx=22, pady=10)
+pres_status_label.pack(pady=(20, 0))
+
+# Mitte: QR-Code (links) + Kamera (mittig)
+pres_center = tk.Frame(presentation, bg=BG)
+
+qr_photo = None
+try:
+    _qr_img = Image.open(QR_IMAGE_PATH).convert("RGB")
+    _qr_img.thumbnail((QR_PRES_SIZE, QR_PRES_SIZE))
+    qr_photo = ImageTk.PhotoImage(_qr_img)
+except Exception:
+    qr_photo = None     # Datei noch nicht vorhanden -> Platzhalter
+
+qr_outer = tk.Frame(pres_center, bg=BRAND_MID, bd=0)
+qr_outer.pack(side="left", padx=(0, 60))
+if qr_photo is not None:
+    pres_qr_label = tk.Label(qr_outer, image=qr_photo, bg=BG, bd=0)
+    pres_qr_label.image = qr_photo
+else:
+    pres_qr_label = tk.Label(
+        qr_outer, text="QR-Code\n\nqr-code.png\nin den Ordner legen",
+        font=pres_status_font, fg=TEXT_FAINT, bg=BG,
+        width=20, height=12, justify="center")
+pres_qr_label.pack(padx=2, pady=2)
+
+pres_cam_outer = tk.Frame(pres_center, bg=BRAND_MID, bd=0)
+pres_cam_outer.pack(side="left")
+pres_cam_label = tk.Label(pres_cam_outer, bg=BG, bd=0)
+pres_cam_label.pack(padx=2, pady=2)
+
+# Großes Wetter-Overlay (nur im Wettermodus sichtbar)
+pres_wetter_label = tk.Label(presentation, text="Wettermodus",
+                             font=pres_wetter_font, fg=GOLD, bg=BG)
+
+# X oben rechts zum Verlassen des Wettermodus
+pres_x_frame, _pres_x_btn = _make_pres_button(
+    presentation, "✕", lambda: _on_pres_wetter_exit(), accent=BRAND_2)
+
+# Untere Aktionsleiste: Wettermodus · Kette aus · Debug Mode
+pres_bottom = tk.Frame(presentation, bg=BG)
+pres_bottom.place(relx=0.5, rely=1.0, y=-34, anchor="s")
+
+pres_wetter_f, _ = _make_pres_button(
+    pres_bottom, "🌦  Wettermodus", lambda: _on_pres_wetter())
+pres_wetter_f.pack(side="left", padx=22)
+
+pres_aus_f, _ = _make_pres_button(
+    pres_bottom, "⏻  Kette ausschalten", lambda: _on_pres_kette_aus())
+pres_aus_f.pack(side="left", padx=22)
+
+pres_cam_toggle_f, pres_cam_toggle_btn = _make_pres_button(
+    pres_bottom, "📷  Kamera aus", lambda: _camera_set(not _cam_on[0]))
+pres_cam_toggle_f.pack(side="left", padx=22)
+
+pres_debug_f, _ = _make_pres_button(
+    pres_bottom, "🛠  Debug Mode", lambda: _show_debug())
+pres_debug_f.pack(side="left", padx=22)
+
+
+# ── Kamera an/aus: Gerät wirklich freigeben (Kamera-LED aus) ─────
+_cam_on = [True]               # Webcam-Gerät aktuell geöffnet?
+
+
+def _update_cam_buttons():
+    txt = "📷  Kamera aus" if _cam_on[0] else "📷  Kamera an"
+    cam_toggle_btn.config(text=txt)
+    pres_cam_toggle_btn.config(text=txt)
+
+
+def _render_cam_off():
+    """Zeigt in beiden UIs einen 'Kamera aus'-Platzhalter statt des Bildes."""
+    for lbl in (cam_label, pres_cam_label):
+        lbl.config(image="", text="📷  Kamera aus", compound="center",
+                   font=pres_status_font, fg=TEXT_FAINT,
+                   width=22, height=8)
+
+
+def _camera_set(on):
+    """Schaltet die Webcam hart an (Gerät öffnen) oder aus (Gerät freigeben).
+
+    Freigeben statt nur Vorschau verstecken, damit die Kamera-LED erlischt.
+    Läuft im Tk-Mainthread, daher keine Kollision mit dem update()-Loop.
+    """
+    global vid
+    if on == _cam_on[0]:
+        _update_cam_buttons()
+        return
+    if on:
+        vid = cv2.VideoCapture(0)
+        vid.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        vid.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        _cam_on[0] = True
+        # Platzhalter zurücksetzen, damit update() das Bild wieder füllen kann.
+        for lbl in (cam_label, pres_cam_label):
+            lbl.config(text="", width=0, height=0)
+    else:
+        _cam_on[0] = False
+        try:
+            vid.release()
+        except Exception:
+            pass
+        _render_cam_off()
+    _update_cam_buttons()
+
+
+def _update_pres_weather_view(active):
+    """Wettermodus aktiv -> großes 'Wettermodus' + X (Kamera aus);
+    sonst Kamera-/QR-Mitte einblenden."""
+    if active:
+        pres_center.place_forget()
+        pres_wetter_label.place(relx=0.5, rely=0.48, anchor="center")
+        pres_x_frame.place(relx=1.0, x=-28, y=28, anchor="ne")
+        pres_x_frame.lift()
+    else:
+        pres_wetter_label.place_forget()
+        pres_x_frame.place_forget()
+        if _ui_mode[0] == "presentation":
+            pres_center.place(relx=0.5, rely=0.5, anchor="center")
+
+
+def _show_presentation():
+    """Wechselt zur cleanen Präsentations-UI."""
+    _exit_mapping_ui()
+    _ui_mode[0] = "presentation"
+    presentation.place(x=0, y=0, relwidth=1, relheight=1)
+    presentation.lift()
+    _update_pres_weather_view(_idle_active and _idle_mode == "wetter")
+
+
+def _show_debug():
+    """Wechselt zurück zur ausführlichen Debug-UI."""
+    _ui_mode[0] = "debug"
+    presentation.place_forget()
+
+
+def _on_pres_wetter():
+    if _idle_active and _idle_mode == "wetter":
+        return                       # läuft bereits
+    _exit_mapping_ui()
+    start_wetter_idle()              # Overlay folgt über den Idle-Callback
+    _camera_set(False)               # Kamera im Wettermodus aus
+    status_var.set("Wettermodus aktiv …")
+
+
+def _on_pres_wetter_exit():
+    stop_idle()
+    stop_lichterkette()
+    _camera_set(True)                # Kamera wieder einschalten
+    status_var.set("Wettermodus beendet.")
+
+
+def _on_pres_kette_aus():
+    stop_idle()
+    _exit_mapping_ui()
+    stop_lichterkette()
+    status_var.set("Kette ausgeschaltet.")
+
+
+def _on_idle_change(active):
+    """Hält das Wetter-Overlay der Präsentations-UI mit dem echten Idle-Status
+    synchron – z. B. wenn ein QR-Scan den Wettermodus beendet."""
+    def _apply():
+        if _ui_mode[0] == "presentation":
+            _update_pres_weather_view(active and _idle_mode == "wetter")
+    root.after(0, _apply)
+
+
+_idle_on_change = _on_idle_change
+
+
 last_scan_time = 0.0
 detector = cv2.QRCodeDetector()
 
@@ -1337,7 +1569,14 @@ def on_qr_detected(data):
 
 def update():
     global _frame_count
+    if not _cam_on[0]:
+        # Kamera ist freigegeben (aus) – nichts lesen, nur weiterplanen.
+        root.after(CAM_REFRESH_MS, update)
+        return
     _, frame = vid.read()
+    if frame is None:
+        root.after(CAM_REFRESH_MS, update)
+        return
 
     _frame_count += 1
     if _frame_count % QR_DETECT_EVERY == 0:
@@ -1351,12 +1590,23 @@ def update():
     crop = 300
     captured_image = captured_image.crop((crop, 0, w - crop, h))
     cropped_w, cropped_h = captured_image.size
-    new_h = int(CAM_WIDTH * cropped_h / cropped_w)
-    captured_image = captured_image.resize((CAM_WIDTH, new_h))
-    photo_image = ImageTk.PhotoImage(image=captured_image)
-    cam_label.photo_image = photo_image
-    cam_label.configure(image=photo_image)
-    cam_label.after(CAM_REFRESH_MS, update)
+
+    if _ui_mode[0] == "presentation":
+        # Im Wettermodus ist die Kamera bewusst aus (großes "Wettermodus").
+        if not (_idle_active and _idle_mode == "wetter"):
+            new_h = int(CAM_PRES_WIDTH * cropped_h / cropped_w)
+            img = captured_image.resize((CAM_PRES_WIDTH, new_h))
+            photo_image = ImageTk.PhotoImage(image=img)
+            pres_cam_label.photo_image = photo_image
+            pres_cam_label.configure(image=photo_image)
+    else:
+        new_h = int(CAM_WIDTH * cropped_h / cropped_w)
+        img = captured_image.resize((CAM_WIDTH, new_h))
+        photo_image = ImageTk.PhotoImage(image=img)
+        cam_label.photo_image = photo_image
+        cam_label.configure(image=photo_image)
+
+    root.after(CAM_REFRESH_MS, update)
 
 
 update()
