@@ -5,6 +5,8 @@ import machine
 import neopixel
 import math
 import random
+import sys
+import uselect
 
 try:
     from wifi_config import SSID, PASSWORD
@@ -13,13 +15,11 @@ except ImportError:
     PASSWORD = "12345678"
 
 # ── LED-Konfiguration ────────────────────────────────────────────
-GPIO_PIN = 4
-ANZ_LEDS = 50   # LEDs für die Ranking-Animation
-MAX_LEDS = 103  # max. Streifenlänge für LED-Mapping-Test
+GPIO_PIN = 5
+ANZ_LEDS = 150  # LEDs für die Ranking-Animation (Fallback ohne Mapping)
+MAX_LEDS = 150  # physische Streifenlänge (LED 0..149)
 
 # ── Animation-Defaults (werden via /start überschrieben) ────────
-# led_order = None  -> generische Demo (LED 0..ANZ_LEDS-1 der Reihe nach).
-# led_order = [..]  -> echte Karten-Positionen in Rang-Reihenfolge (bestes zuerst).
 _state = {
     "start_rgb": [255, 255, 50],
     "mid_rgb":   [255, 130, 0],
@@ -33,11 +33,6 @@ _anim_task = None
 
 
 def _grad(s, m, e, t):
-    """Farbe an Position t (0..1) auf dem 3-Farben-Verlauf start->mid->end.
-
-    Erste Hälfte (t<=0.5) blendet start->mid, zweite Hälfte mid->end.
-    Liefert (r, g, b) in normalem RGB.
-    """
     if t <= 0.5:
         f = t / 0.5 if t > 0 else 0.0
         a, b = s, m
@@ -75,14 +70,12 @@ async def run_animation():
     e = _state["end_rgb"]
     animation = _state["animation"]
 
-    # LED-Reihenfolge: echte Karten-Positionen (Rang-Reihenfolge) oder Demo 0..N-1.
     leds = _state.get("led_order")
     if not leds:
         leds = list(range(ANZ_LEDS))
     n = len(leds)
 
     def _fortschritt(pos):
-        # 0.0 = bestes (Platz 1), 1.0 = schlechtestes. Bei nur 1 LED -> 0.
         return pos / (n - 1) if n > 1 else 0.0
 
     try:
@@ -104,7 +97,7 @@ async def run_animation():
             if not animation:
                 np[led] = (int(g * ziel_hell), int(r * ziel_hell), int(b * ziel_hell))
                 np.write()
-                await asyncio.sleep(0)  # yield, damit der Server weiter laufen kann
+                await asyncio.sleep(0)
                 continue
 
             mikro_pause = base_pause / FADE_SCHRITTE
@@ -114,7 +107,6 @@ async def run_animation():
                 np.write()
                 await asyncio.sleep(mikro_pause)
 
-        # Top-N pulsieren (die ersten N LEDs der Rang-Reihenfolge)
         top_farben = []
         for pos in range(min(TOP_N, n)):
             led = leds[pos]
@@ -141,7 +133,6 @@ async def run_animation():
 
 
 async def cancel_anim():
-    """Bricht eine laufende Animation ab und wartet bis sie beendet ist."""
     global _anim_task
     if _anim_task is not None:
         _anim_task.cancel()
@@ -152,11 +143,76 @@ async def cancel_anim():
         _anim_task = None
 
 
+# ── Gemeinsame Befehls-Logik (HTTP + Serial) ─────────────────────
+async def _handle_command(path, incoming):
+    """Führt einen Befehl aus und gibt das Antwort-Dict zurück."""
+    global _anim_task
+
+    if path == "/ping":
+        return {"status": "ok", "pong": True}
+
+    elif path == "/start":
+        _state["start_rgb"] = incoming.get("start_rgb", _state["start_rgb"])
+        _state["mid_rgb"]   = incoming.get("mid_rgb",   _state["mid_rgb"])
+        _state["end_rgb"]   = incoming.get("end_rgb",   _state["end_rgb"])
+        _state["animation"] = incoming.get("animation", _state["animation"])
+        _state["led_order"] = incoming.get("leds")
+        await cancel_anim()
+        _anim_task = asyncio.create_task(run_animation())
+        return {"status": "ok", "action": "start"}
+
+    elif path == "/frame":
+        await cancel_anim()
+        pixels = incoming.get("pixels", [])
+        for i in range(MAX_LEDS):
+            if i < len(pixels):
+                c = pixels[i]
+                np[i] = (int(c[1]), int(c[0]), int(c[2]))
+            else:
+                np[i] = (0, 0, 0)
+        np.write()
+        return {"status": "ok", "action": "frame"}
+
+    elif path == "/stop":
+        await cancel_anim()
+        alle_aus()
+        return {"status": "ok", "action": "stop"}
+
+    elif path.startswith("/led/"):
+        try:
+            idx = int(path.split("/")[-1])
+        except ValueError:
+            idx = 0
+        await cancel_anim()
+        n = min(max(idx + 1, ANZ_LEDS), MAX_LEDS)
+        for i in range(n):
+            np[i] = (0, 0, 0)
+        if 0 <= idx < MAX_LEDS:
+            np[idx] = (255, 255, 255)
+        np.write()
+        return {"status": "ok"}
+
+    elif path == "/status":
+        ip = "0.0.0.0"
+        try:
+            wlan = network.WLAN(network.STA_IF)
+            if wlan.isconnected():
+                ip = wlan.ifconfig()[0]
+        except Exception:
+            pass
+        return {
+            "status": "ok",
+            "ip": ip,
+            "anim_running": _anim_task is not None,
+        }
+
+    else:
+        return {"error": "not found"}
+
+
 # ── HTTP-Handler ─────────────────────────────────────────────────
 async def handle_client(reader, writer):
-    global _anim_task
     try:
-        # Request-Zeile lesen
         line = await reader.readline()
         if not line:
             return
@@ -165,7 +221,6 @@ async def handle_client(reader, writer):
             return
         path = parts[1]
 
-        # Headers lesen (Content-Length merken, Rest verwerfen)
         content_length = 0
         while True:
             h = await reader.readline()
@@ -177,87 +232,20 @@ async def handle_client(reader, writer):
                 except Exception:
                     pass
 
-        # Body lesen
         body = b""
         if content_length > 0:
             body = await reader.read(content_length)
 
-        # Routing
-        if path == "/start":
-            incoming = {}
-            if body:
-                try:
-                    incoming = ujson.loads(body)
-                except Exception:
-                    incoming = {}
-            _state["start_rgb"] = incoming.get("start_rgb", _state["start_rgb"])
-            _state["mid_rgb"]   = incoming.get("mid_rgb",   _state["mid_rgb"])
-            _state["end_rgb"]   = incoming.get("end_rgb",   _state["end_rgb"])
-            _state["animation"] = incoming.get("animation", _state["animation"])
-            # leds NUR setzen, wenn mitgeschickt – sonst zurück auf Demo (None),
-            # damit ein manueller Neustart nicht das alte Ranking wiederholt.
-            _state["led_order"] = incoming.get("leds")
-            await cancel_anim()
-            _anim_task = asyncio.create_task(run_animation())
-            resp = b'{"status":"ok","action":"start"}'
-
-        elif path == "/frame":
-            # Statischer Frame: feste Farbe je LED (für Idle-/Wetter-Modi).
-            # Body: {"pixels": [[r,g,b], [r,g,b], ...]} – Index = LED-Nummer.
-            # Der Laptop rechnet, der ESP32 zeigt nur an.
-            await cancel_anim()
-            incoming = {}
-            if body:
-                try:
-                    incoming = ujson.loads(body)
-                except Exception:
-                    incoming = {}
-            pixels = incoming.get("pixels", [])
-            for i in range(MAX_LEDS):
-                if i < len(pixels):
-                    c = pixels[i]
-                    # Eingang ist normales RGB -> Streifen erwartet GRB.
-                    np[i] = (int(c[1]), int(c[0]), int(c[2]))
-                else:
-                    np[i] = (0, 0, 0)
-            np.write()
-            resp = b'{"status":"ok","action":"frame"}'
-
-        elif path == "/stop":
-            # Erst eine evtl. laufende Animation abbrechen, dann IMMER die Kette
-            # löschen. Wichtig: Im Idle-/Mapping-Modus läuft KEIN _anim_task
-            # (dort werden nur statische Frames/Einzel-LEDs geschrieben), daher
-            # würde cancel_anim() allein die LEDs nicht ausschalten.
-            await cancel_anim()
-            alle_aus()
-            resp = b'{"status":"ok","action":"stop"}'
-
-        elif path.startswith("/led/"):
+        incoming = {}
+        if body:
             try:
-                idx = int(path.split("/")[-1])
-            except ValueError:
-                idx = 0
-            await cancel_anim()
-            n = min(max(idx + 1, ANZ_LEDS), MAX_LEDS)
-            for i in range(n):
-                np[i] = (0, 0, 0)
-            if 0 <= idx < MAX_LEDS:
-                np[idx] = (255, 255, 255)
-            np.write()
-            resp = b'{"status":"ok"}'
+                incoming = ujson.loads(body)
+            except Exception:
+                pass
 
-        elif path == "/status":
-            ip = network.WLAN(network.STA_IF).ifconfig()[0]
-            resp = ujson.dumps({
-                "status": "ok",
-                "ip": ip,
-                "anim_running": _anim_task is not None,
-            }).encode()
+        result = await _handle_command(path, incoming)
+        resp = ujson.dumps(result).encode()
 
-        else:
-            resp = b'{"error":"not found"}'
-
-        # Antwort senden
         header = (
             b"HTTP/1.0 200 OK\r\n"
             b"Content-Type: application/json\r\n"
@@ -273,8 +261,44 @@ async def handle_client(reader, writer):
         writer.close()
 
 
+# ── Serial-Listener (USB-Kabel-Modus) ───────────────────────────
+# Liest eine JSON-Zeile pro Befehl vom Laptop und antwortet mit JSON.
+# Läuft immer – auch wenn WLAN verbunden ist. Der Laptop entscheidet,
+# welchen Kanal er nutzt.
+# Debug-Prints des ESP32 erscheinen ebenfalls auf der seriellen Leitung;
+# der Laptop ignoriert Zeilen, die kein gültiges JSON sind.
+async def serial_listener():
+    poll = uselect.poll()
+    poll.register(sys.stdin, uselect.POLLIN)
+    buf = ""
+    while True:
+        ready = poll.poll(0)
+        if ready:
+            try:
+                char = sys.stdin.read(1)
+                if char in ("\n", "\r"):
+                    line = buf.strip()
+                    buf = ""
+                    if not line:
+                        continue
+                    try:
+                        incoming = ujson.loads(line)
+                        cmd  = incoming.get("cmd", "")
+                        data = incoming.get("data") or {}
+                        resp = await _handle_command(cmd, data)
+                        # Antwort mit eindeutigem Präfix, damit der Laptop
+                        # sie von Debug-Ausgaben unterscheiden kann.
+                        sys.stdout.write(">>>" + ujson.dumps(resp) + "\n")
+                    except Exception as ex:
+                        sys.stdout.write('>>>{"error":"parse_error"}\n')
+                else:
+                    buf += char
+            except Exception:
+                pass
+        await asyncio.sleep(0.01)
+
+
 # ── WLAN-Verbindung ───────────────────────────────────────────────
-# Klartext-Namen der WLAN-Status-Codes (für verständliche Fehlermeldungen).
 _WLAN_STATUS = {
     getattr(network, "STAT_IDLE", 1000):           "IDLE (nichts passiert)",
     getattr(network, "STAT_CONNECTING", 1001):     "CONNECTING (verbinde...)",
@@ -288,15 +312,12 @@ async def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
 
-    # Lautes Banner: zeigt EXAKT, welche Zugangsdaten geladen wurden.
-    # Steht hier die ALTE SSID, wurde wifi_config.py nicht auf den ESP32 gespeichert!
     print("=" * 50)
     print("Geladene WLAN-Config:")
     print("  SSID     = '%s'" % SSID)
     print("  PASSWORT = '%s'  (Länge %d)" % (PASSWORD, len(PASSWORD)))
     print("=" * 50)
 
-    # Sichtbare Netze scannen – ist der iPhone-Hotspot überhaupt da (2,4 GHz)?
     try:
         print("Sichtbare 2,4-GHz-Netze:")
         gefunden = False
@@ -309,14 +330,10 @@ async def connect_wifi():
         if gefunden:
             print(">> '%s' ist sichtbar." % SSID)
         else:
-            print(">> ACHTUNG: '%s' NICHT in der Liste! "
-                  "iPhone-Hotspot? -> 'Kompatibilität maximieren' EIN (2,4 GHz)." % SSID)
+            print(">> ACHTUNG: '%s' NICHT in der Liste!" % SSID)
     except Exception as ex:
         print("Scan fehlgeschlagen:", ex)
 
-    # WICHTIG: MicroPython reconnectet beim Boot automatisch ins zuletzt
-    # gespeicherte WLAN. Diese alte Verbindung erst trennen, sonst bleibt der
-    # ESP32 dort hängen und ignoriert die neue Config (IP ändert sich nie).
     try:
         wlan.disconnect()
     except Exception:
@@ -344,12 +361,19 @@ async def connect_wifi():
 
 
 async def main():
+    # Serial-Listener immer starten – unabhängig vom WLAN-Status.
+    asyncio.create_task(serial_listener())
+    print("Serial-Listener aktiv (USB-Kabel-Modus verfügbar).")
+
     ip = await connect_wifi()
-    if not ip:
-        return
-    server = await asyncio.start_server(handle_client, "0.0.0.0", 80)
-    print("HTTP-Server: http://" + ip + "/")
-    await server.wait_closed()
+    if ip:
+        server = await asyncio.start_server(handle_client, "0.0.0.0", 80)
+        print("HTTP-Server: http://" + ip + "/")
+        await server.wait_closed()
+    else:
+        print("Kein WLAN – nur Serial-Modus aktiv. Warte auf Befehle …")
+        while True:
+            await asyncio.sleep(1)
 
 
 asyncio.run(main())

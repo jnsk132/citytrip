@@ -6,27 +6,41 @@ from PIL import Image, ImageTk, ImageDraw
 import os
 import json
 import random
-import socket
 import threading
 import time
 import unicodedata
 import urllib.request
 import urllib.error
 import urllib.parse
-from concurrent.futures import ThreadPoolExecutor
+
+try:
+    import serial
+    import serial.tools.list_ports
+    _SERIAL_AVAILABLE = True
+except ImportError:
+    _SERIAL_AVAILABLE = False
+    print("[Serial] pyserial nicht installiert – nur WLAN-Modus. "
+          "Installation: pip install pyserial")
 
 from tag_nacht import build_frame, set_idle_farben, get_idle_farben
 
 
 # ════════════════════════════════════════════════════════════════
-#  ESP32-Lichterkette: Kommunikation über WLAN (HTTP)
-#  ESP32 muss esp32_firmware/main.py ausführen und im selben WLAN sein.
-#  Die IP wird automatisch im lokalen Netz gesucht (kein Eintragen nötig).
+#  ESP32-Lichterkette: Kommunikation ausschließlich über USB-Serial.
 # ════════════════════════════════════════════════════════════════
-ESP32_HOST = None             # None = automatisch suchen; sonst feste IP "192.168.x.y"
-ESP32_HTTP_PORT = 80
-ESP32_TIMEOUT = 3             # Sekunden bis Timeout pro normalem Request
-ESP32_SCAN_TIMEOUT = 0.4      # Sekunden pro Host beim Netz-Scan
+
+SERIAL_BAUD     = 115200
+SERIAL_TIMEOUT  = 5       # Sekunden Wartezeit auf Antwort
+HTTP_TIMEOUT    = 3       # Timeout für den Ranking-Abruf vom Flask-Backend
+# Fester Port (z. B. "/dev/cu.usbmodem1101" oder "COM5"). None = alle Ports scannen.
+SERIAL_PORT          = None
+SERIAL_PROBE_WINDOW  = 8     # Sekunden pro Port: gibt dem ESP nach dem Öffnen Zeit zu booten
+SERIAL_PING_INTERVAL = 0.5   # in diesem Takt wird während des Wartens neu gepingt
+# Antworten des ESP32 beginnen mit diesem Präfix (trennt JSON von Debug-Prints).
+_SERIAL_PREFIX  = b">>>"
+
+_serial_conn    = None    # offene serial.Serial-Instanz oder None
+_serial_lock    = threading.Lock()
 
 # Steuerzustand der Lichterkette (wird von der UI gesetzt, an den ESP32 geschickt).
 LICHT_STATE = {
@@ -36,88 +50,150 @@ LICHT_STATE = {
     "animation": True,
 }
 
-# Zuletzt gefundene/erreichbare ESP32-IP (Cache, damit nicht jedes Mal gescannt wird).
-_esp_host = ESP32_HOST
-_esp_host_lock = threading.Lock()
+
+def _candidate_ports():
+    """Liefert die Liste der zu prüfenden Ports (fester Port oder USB-Serial-Kandidaten)."""
+    ports = list(serial.tools.list_ports.comports())
+    if SERIAL_PORT:
+        return [SERIAL_PORT]
+    # Bevorzugt offensichtliche USB-Serial-Geräte; Bluetooth o. Ä. werden übersprungen.
+    likely = [p.device for p in ports
+              if any(k in p.device.lower() for k in ("usb", "acm", "wch", "modem"))]
+    return likely or [p.device for p in ports]
 
 
-def _local_subnet_prefix():
-    """Ermittelt das eigene /24-Präfix, z. B. '192.168.8.' (oder None)."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+def _probe_port(device):
+    """Öffnet <device>, pingt wiederholt und gibt die offene Verbindung zurück,
+    sobald der ESP32 mit '>>>{"pong":true}' antwortet – sonst None."""
     try:
-        s.connect(("8.8.8.8", 80))   # verbindet nicht wirklich, liefert nur lokale IP
-        ip = s.getsockname()[0]
-    except OSError:
-        return None
-    finally:
-        s.close()
-    return ip.rsplit(".", 1)[0] + "."
-
-
-def _probe_esp32(host):
-    """True, wenn unter <host> wirklich unser ESP32 antwortet (echtes /status-JSON)."""
-    url = f"http://{host}:{ESP32_HTTP_PORT}/status"
-    try:
-        with urllib.request.urlopen(url, timeout=ESP32_SCAN_TIMEOUT) as r:
-            data = json.loads(r.read().decode())
-        # Eindeutiger Marker unserer Firmware – filtert Router/Captive-Portals raus.
-        return "anim_running" in data
+        conn = serial.Serial()
+        conn.port = device
+        conn.baudrate = SERIAL_BAUD
+        conn.timeout = 0.3
+        # Reset über DTR/RTS unterdrücken: eine bereits laufende Firmware soll
+        # nicht neu booten (und der ESP32-C3 nicht in den Bootloader fallen).
+        conn.dtr = False
+        conn.rts = False
+        conn.open()
     except Exception:
-        return False
-
-
-def _discover_esp32():
-    """Scannt das lokale /24-Netz nach dem ESP32 und liefert dessen IP (oder None)."""
-    prefix = _local_subnet_prefix()
-    if not prefix:
         return None
-    print(f"[ESP32] Suche Lichterkette im Netz {prefix}0/24 …")
-    hosts = [f"{prefix}{i}" for i in range(1, 255)]
-    with ThreadPoolExecutor(max_workers=64) as pool:
-        for host, found in zip(hosts, pool.map(_probe_esp32, hosts)):
-            if found:
-                print(f"[ESP32] Gefunden: {host}")
-                return host
-    print("[ESP32] Kein ESP32 im Netz gefunden.")
+    try:
+        conn.reset_input_buffer()
+        deadline = time.time() + SERIAL_PROBE_WINDOW
+        next_ping = 0.0
+        buf = b""
+        while time.time() < deadline:
+            now = time.time()
+            if now >= next_ping:
+                try:
+                    conn.write(b'{"cmd":"/ping"}\n')
+                except Exception:
+                    break
+                next_ping = now + SERIAL_PING_INTERVAL
+            chunk = conn.read(conn.in_waiting or 1)
+            if chunk:
+                buf += chunk
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                line = line.strip()
+                if line.startswith(_SERIAL_PREFIX):
+                    try:
+                        resp = json.loads(line[len(_SERIAL_PREFIX):].decode())
+                        if resp.get("pong"):
+                            print(f"[Serial] ESP32 gefunden: {device}")
+                            return conn
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    try:
+        conn.close()
+    except Exception:
+        pass
     return None
 
 
-def _get_esp_host(force_rescan=False):
-    """Liefert die ESP32-IP – aus dem Cache, oder per Netz-Scan."""
-    global _esp_host
-    with _esp_host_lock:
-        if _esp_host and not force_rescan:
-            return _esp_host
-        _esp_host = _discover_esp32()
-        return _esp_host
+def _find_esp32_serial():
+    """Sucht den ESP32 auf den seriellen Ports und liefert eine offene Verbindung (oder None)."""
+    if not _SERIAL_AVAILABLE:
+        return None
+    for device in _candidate_ports():
+        print(f"[Serial] Prüfe Port {device} …")
+        conn = _probe_port(device)
+        if conn:
+            return conn
+    return None
 
 
-def _esp_request(path, data=None, _retry=True):
-    """Schickt GET/POST an den ESP32. Bei Fehler einmal neu suchen und erneut versuchen."""
-    host = _get_esp_host()
-    if not host:
-        print(f"[ESP32] Kein ESP32 erreichbar ({path}).")
-        return False
-    url = f"http://{host}:{ESP32_HTTP_PORT}{path}"
-    try:
-        if data is not None:
-            body = json.dumps(data).encode()
-            req = urllib.request.Request(
-                url, data=body,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-        else:
-            req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=ESP32_TIMEOUT):
-            return True
-    except (urllib.error.URLError, OSError) as e:
-        print(f"[ESP32] HTTP-Fehler ({path}): {e}")
-        if _retry:
-            # IP evtl. veraltet (neues WLAN / DHCP) → einmal neu suchen.
-            if _get_esp_host(force_rescan=True):
-                return _esp_request(path, data, _retry=False)
-        return False
+def _serial_request(path, data=None):
+    """Sendet einen Befehl via USB-Serial und wartet auf die JSON-Antwort.
+
+    Rückgabe: True bei Erfolg, sonst False.
+    """
+    global _serial_conn
+    with _serial_lock:
+        if _serial_conn is None or not _serial_conn.is_open:
+            print("[Serial] Keine Verbindung – suche ESP32 …")
+            conn = _find_esp32_serial()
+            if conn:
+                _serial_conn = conn
+            else:
+                print("[Serial] Kein ESP32 per Kabel gefunden.")
+                return False
+        try:
+            payload = {"cmd": path}
+            if data is not None:
+                payload["data"] = data
+            line = (json.dumps(payload) + "\n").encode()
+            _serial_conn.reset_input_buffer()
+            _serial_conn.write(line)
+            # Antwort lesen (ignoriert Debug-Prints ohne Präfix)
+            deadline = time.time() + SERIAL_TIMEOUT
+            buf = b""
+            while time.time() < deadline:
+                chunk = _serial_conn.read(_serial_conn.in_waiting or 1)
+                if chunk:
+                    buf += chunk
+                while b"\n" in buf:
+                    ln, buf = buf.split(b"\n", 1)
+                    ln = ln.strip()
+                    if ln.startswith(_SERIAL_PREFIX):
+                        try:
+                            resp = json.loads(ln[len(_SERIAL_PREFIX):].decode())
+                            return resp.get("status") == "ok"
+                        except Exception:
+                            pass
+            print(f"[Serial] Timeout bei {path}")
+            return False
+        except Exception as e:
+            print(f"[Serial] Fehler: {e}")
+            try:
+                _serial_conn.close()
+            except Exception:
+                pass
+            _serial_conn = None
+            return False
+
+
+def _init_connection():
+    """Stellt beim Start die USB-Serial-Verbindung zum ESP32 her."""
+    global _serial_conn
+    print("[ESP32] Suche ESP32 per USB-Serial …")
+    conn = _find_esp32_serial()
+    if conn:
+        _serial_conn = conn
+        print("[ESP32] Kabel-Modus aktiv.")
+    else:
+        print("[ESP32] Kein ESP32 per USB gefunden – "
+              "beim ersten Befehl wird erneut gesucht.")
+
+
+threading.Thread(target=_init_connection, daemon=True).start()
+
+
+def _esp_request(path, data=None):
+    """Schickt einen Befehl per USB-Serial an den ESP32. True bei Erfolg, sonst False."""
+    return bool(_serial_request(path, data))
 
 
 def start_lichterkette():
@@ -150,7 +226,7 @@ def stop_lichterkette():
 #  schickt den fertigen Frame an den ESP32. Wird alle paar Sekunden
 #  neu gerechnet, damit der Tag/Nacht-Übergang langsam wandert.
 # ════════════════════════════════════════════════════════════════
-IDLE_LED_COUNT = 50           # physische Länge der Kette (LED 0..49)
+IDLE_LED_COUNT = 150           # physische Länge der Kette (LED 0..149)
 IDLE_REFRESH_SEC = 60         # wie oft der Sonnenstand neu berechnet wird
 
 _idle_stop = threading.Event()
@@ -214,7 +290,7 @@ def stop_idle():
     _idle_stop.set()
     t = _idle_thread
     if t is not None and t is not threading.current_thread():
-        t.join(timeout=ESP32_TIMEOUT + 1)
+        t.join(timeout=SERIAL_TIMEOUT + 1)
     _idle_thread = None
     _idle_notify(False)
 
@@ -223,7 +299,8 @@ def stop_idle():
 #  LED-Mapping: JSON laden/speichern + Single-LED-Steuerung
 # ════════════════════════════════════════════════════════════════
 JSON_MAPPING_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "led_mapping.json")
-MAPPING_ANZ_LEDS = 103
+MAPPING_ANZ_LEDS = 150
+_NULL_SENTINEL = "NULL"   # LED ist physisch nicht sichtbar
 
 
 def _lade_staedte():
@@ -282,7 +359,7 @@ def _city_to_led_indices():
     """Invertiert led_mapping.json zu: Stadt (kleingeschrieben) -> [LED-Indizes]."""
     out = {}
     for idx, city in _lade_mapping().items():
-        if city:
+        if city and city != _NULL_SENTINEL:
             out.setdefault(city.strip().lower(), []).append(idx)
     return out
 
@@ -291,7 +368,7 @@ def _fetch_ranking(base_url, session_id):
     """Holt das Ranking der Session vom Flask-Backend. Städte (bestes zuerst) oder None."""
     url = f"{base_url}/api/led-ranking/{session_id}"
     try:
-        with urllib.request.urlopen(url, timeout=ESP32_TIMEOUT) as r:
+        with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT) as r:
             data = json.loads(r.read().decode())
         ranking = data.get("ranking", [])
         ranking.sort(key=lambda e: e.get("rank", 9999))   # sicherheitshalber nach Rang
@@ -315,8 +392,8 @@ def _ranking_to_led_order(cities):
 
 
 # Bereich für zufällige Test-Positionen, solange das LED-Mapping noch leer ist.
-# Bei 0..49 sicher auf der Kette sichtbar; bei längerer Kette auf 103 erhöhen.
-RANDOM_TEST_LEDS = 50
+# Volle Kettenlänge (LED 0..149).
+RANDOM_TEST_LEDS = 150
 
 
 def _random_led_order(count):
@@ -761,7 +838,7 @@ m_nav_row.pack(fill="x", padx=24, pady=(0, 6))
 m_prev_f, _ = _make_chip_button(m_nav_row, "←  Zurück",  lambda: _mapping_navigate(-1))
 m_prev_f.pack(side="left")
 
-m_led_label = tk.Label(m_nav_row, text="LED 0 / 103", font=result_font,
+m_led_label = tk.Label(m_nav_row, text=f"LED 0 / {MAPPING_ANZ_LEDS}", font=result_font,
                        fg=GOLD, bg=SURFACE, width=14, anchor="center")
 m_led_label.pack(side="left", padx=20)
 
@@ -785,6 +862,10 @@ m_entry = tk.Entry(m_combo_row, font=sub_font, width=30,
                    highlightcolor=BRAND_MID)
 m_entry.pack(side="left")
 
+m_null_frame, m_null_btn = _make_chip_button(
+    m_combo_row, "⊘ NULL", lambda: _mapping_set_null())
+m_null_frame.pack(side="left", padx=(10, 0))
+
 m_save_label = tk.Label(m_combo_row, text="", font=score_font, fg=GOLD, bg=SURFACE)
 m_save_label.pack(side="left", padx=(14, 0))
 
@@ -807,7 +888,9 @@ def _mapping_update_ui():
     m_progress.config(text=f"{zugewiesen} / {MAPPING_ANZ_LEDS} zugewiesen")
     m_led_label.config(text=f"LED {idx} / {MAPPING_ANZ_LEDS}")
     city = _mapping_data.get(idx)
-    if city:
+    if city == _NULL_SENTINEL:
+        m_current.config(text="NULL – nicht sichtbar", fg=TEXT_DIM)
+    elif city:
         m_current.config(text=f"Gespeichert: {city}", fg=GOLD)
     else:
         m_current.config(text="Noch nicht zugewiesen", fg=TEXT_FAINT)
@@ -818,21 +901,49 @@ def _mapping_update_ui():
 
 
 def _mapping_speichern_aktuell():
-    city = _resolve_city(m_entry.get())
+    raw = m_entry.get().strip()
+    if raw.upper() == _NULL_SENTINEL:
+        city = _NULL_SENTINEL
+    else:
+        city = _resolve_city(raw) if raw else None
     idx = _mapping_index[0]
-    _mapping_data[idx] = city if city else None
-    _speichere_mapping_eintrag(idx, city if city else None)
+    _mapping_data[idx] = city
+    _speichere_mapping_eintrag(idx, city)
     # Eingabefeld auf den kanonischen Namen normalisieren (z. B. "Belize Stadt" -> "Belize-Stadt")
-    if m_entry.get().strip() != (city or ""):
+    if raw != (city or ""):
         m_entry.delete(0, "end")
         m_entry.insert(0, city or "")
     zugewiesen = sum(1 for v in _mapping_data.values() if v)
     m_progress.config(text=f"{zugewiesen} / {MAPPING_ANZ_LEDS} zugewiesen")
-    m_current.config(
-        text=f"Gespeichert: {city}" if city else "Noch nicht zugewiesen",
-        fg=GOLD if city else TEXT_FAINT)
+    if city == _NULL_SENTINEL:
+        m_current.config(text="NULL – nicht sichtbar", fg=TEXT_DIM)
+    else:
+        m_current.config(
+            text=f"Gespeichert: {city}" if city else "Noch nicht zugewiesen",
+            fg=GOLD if city else TEXT_FAINT)
     m_save_label.config(text="✓")
     m_save_label.after(1400, lambda: m_save_label.config(text=""))
+
+
+def _mapping_set_null():
+    """Markiert die aktuelle LED explizit als nicht sichtbar (NULL) und springt zur nächsten."""
+    idx = _mapping_index[0]
+    _mapping_data[idx] = _NULL_SENTINEL
+    _speichere_mapping_eintrag(idx, _NULL_SENTINEL)
+    _ac_close()
+    m_entry.delete(0, "end")
+    m_entry.insert(0, _NULL_SENTINEL)
+    zugewiesen = sum(1 for v in _mapping_data.values() if v)
+    m_progress.config(text=f"{zugewiesen} / {MAPPING_ANZ_LEDS} zugewiesen")
+    m_current.config(text="NULL – nicht sichtbar", fg=TEXT_DIM)
+    m_save_label.config(text="✓")
+    m_save_label.after(1400, lambda: m_save_label.config(text=""))
+    # direkt zur nächsten LED springen
+    new_idx = (idx + 1) % MAPPING_ANZ_LEDS
+    _mapping_index[0] = new_idx
+    _stream_single_led(new_idx)
+    _mapping_update_ui()
+    m_entry.focus_set()
 
 
 def _mapping_navigate(richtung):
@@ -841,6 +952,7 @@ def _mapping_navigate(richtung):
     _mapping_index[0] = new_idx
     _stream_single_led(new_idx)
     _mapping_update_ui()
+    m_entry.focus_set()
 
 
 def _mapping_alle_entfernen():
@@ -951,6 +1063,9 @@ def _ac_show(_event=None):
     # Navigationstasten nicht als Tippen behandeln
     if _event is not None and _event.keysym in (
             "Up", "Down", "Return", "Escape", "Tab"):
+        return
+    if m_entry.get().strip().upper() == _NULL_SENTINEL:
+        _ac_close()
         return
     matches = _ac_matches(m_entry.get())[:60]
     if not matches:
