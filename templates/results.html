@@ -5,20 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Dein Reiseziel – CityTrip</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-    <meta name="theme-color" content="#292F36">
+    <meta name="theme-color" content="#0a0d15">
     <meta property="og:title" content="Mein Reiseziel – CityTrip">
     <meta property="og:description" content="Ich habe mein perfektes Reiseziel gefunden! Finde auch du dein Traumziel mit CityTrip.">
     <meta property="og:image" content="{{ request.host_url }}static/start.png">
     <meta property="og:type" content="website">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/theme.css">
     <link rel="stylesheet" href="/static/results-style.css">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
+    <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+
     <div class="hero-container">
-        <h1 class="hero-text">Dein perfektes Reiseziel ist...</h1>
-        <a href="#content" class="scroll-arrow">
+        <span class="chip">✨ Analyse abgeschlossen</span>
+        <h1 class="hero-text">Dein perfektes <span class="grad-text">Reiseziel</span> ist...</h1>
+        <a href="#content" class="scroll-arrow btn-icon" aria-label="Zu den Ergebnissen scrollen">
             <i class="fa fa-chevron-down"></i>
         </a>
     </div>
@@ -27,7 +34,7 @@
         {% for city in cities %}
         <div class="image-wrapper">
             <div class="image-container">
-                <p class="rank-badge">#{{loop.index}}</p>
+                <p class="rank-badge">#{{ loop.index }}{% if loop.first %} · Dein Match{% endif %}</p>
                 <img class="cropped_img" src="/static/Alle_Stadt_Bilder_neu/{{city[11]}}.jpg" alt="Stadtbild">
                 <div class="gradient-overlay"></div>
                 <div class="image-content">
@@ -62,7 +69,7 @@
         </div>
 
         <!-- Seltenheits-Vergleich -->
-        {% if rarity and rarity.total_sessions > 1 %}
+        {% if rarity %}
         <div class="rarity-section">
             <div class="rarity-top">
                 <div>
@@ -87,9 +94,40 @@
                 <div class="rarity-track">
                     <div class="rarity-fill" style="width: {{ 100 - item.pct }}%"></div>
                 </div>
-                <p class="rarity-item-text">{{ 100 - item.pct }}% teilen diese Vorliebe <strong>nicht</strong></p>
+                <p class="rarity-item-text">{{ 100 - item.pct }}% teilen diese Vorliebe nicht</p>
             </div>
             {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if short_code %}
+        <div class="descriptive-container compare-intro">
+            <h1 class="title">Gemeinsam reisen?</h1>
+            <p class="scratch-hint-text">Gib den Code deiner Mitreisenden ein und wir führen eure Geschmäcker zusammen – so findet ihr das Reiseziel, das zu eurer ganzen Gruppe passt.</p>
+        </div>
+        <div class="compare-box">
+            <div class="compare-box-inner">
+                <p class="compare-label">Dein Code</p>
+                <div class="compare-code">{{ short_code }}</div>
+                <p class="compare-hint">Gib deinem Freund diesen Code</p>
+            </div>
+            <div class="compare-divider"></div>
+            <form class="compare-form" action="/compare/join" method="POST">
+                <p class="compare-label">Code deines Freundes</p>
+                <div class="compare-input-row">
+                    <input type="text" name="friend_code" maxlength="4"
+                           placeholder="- - - -"
+                           class="compare-input"
+                           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+                           oninput="this.value=this.value.toUpperCase()" required>
+                    <button type="submit" class="compare-btn">
+                        <i class="fa fa-arrow-right"></i>
+                    </button>
+                </div>
+                {% if request.args.get('code_error') %}
+                <p class="compare-error">Code nicht gefunden – bitte nochmal prüfen.</p>
+                {% endif %}
+            </form>
         </div>
         {% endif %}
 
@@ -139,7 +177,7 @@
                     </div>
                     <div class="buddy-header-text">
                         {% if travel_buddy.shared_stat %}
-                        <p class="buddy-shared-stat">✓ {{ travel_buddy.shared_stat }}</p>
+                        <!-- <p class="buddy-shared-stat">✓ {{ travel_buddy.shared_stat }}</p> -->
                         {% endif %}
                     </div>
                 </div>
@@ -279,6 +317,201 @@
         </div>
         </div><!-- /.bonus-scroller-wrap -->
 
+        {% if challenge %}
+        <div class="rc-section reveal">
+            <div class="rc-head">
+                <span class="rc-chip">🧭 Wie tickt der Algorithmus?</span>
+                <h2 class="rc-title">Denkt der Algorithmus <span class="grad-text">wie du</span>?</h2>
+                <p class="rc-subtitle">Sortiere die 5 Städte so, wie sie zu dir passen – oben passt am besten, unten am wenigsten. Danach siehst du, wie ähnlich der Algorithmus dich einschätzt und warum.</p>
+            </div>
+
+            <div class="rc-list" id="rcList">
+                {% for c in challenge %}
+                <div class="rc-card" data-true-rank="{{ c.true_rank }}" data-total="{{ c.total }}">
+                    <span class="rc-pos"></span>
+                    <img class="rc-thumb" src="/static/Alle_Stadt_Bilder_neu/{{ c.img }}.jpg" alt="{{ c.name }}" draggable="false">
+                    <div class="rc-info">
+                        <p class="rc-name">{{ c.name }}</p>
+                        <p class="rc-country">{{ c.country }}</p>
+                        <div class="rc-reveal">
+                            <p class="rc-score">Score {{ c.total }}</p>
+                            <ul class="rc-reasons">
+                                {% for r in c.reasons %}<li>{{ r }}</li>{% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    <span class="rc-status" aria-hidden="true"></span>
+                    <span class="rc-grip" aria-hidden="true">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="3" r="1.4" fill="currentColor"/><circle cx="11" cy="3" r="1.4" fill="currentColor"/><circle cx="5" cy="8" r="1.4" fill="currentColor"/><circle cx="11" cy="8" r="1.4" fill="currentColor"/><circle cx="5" cy="13" r="1.4" fill="currentColor"/><circle cx="11" cy="13" r="1.4" fill="currentColor"/></svg>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <button class="rc-submit btn-primary" id="rcSubmit">Vergleichen</button>
+
+            <div class="rc-result" id="rcResult">
+                <p class="rc-verdict" id="rcVerdict"></p>
+                <div class="rc-metrics">
+                    <div class="rc-metric">
+                        <span class="rc-metric-num" id="rcMatch">–</span>
+                        <span class="rc-metric-label">Übereinstimmung mit dir</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function () {
+            var list = document.getElementById('rcList');
+            if (!list) return;
+            var btn = document.getElementById('rcSubmit');
+
+            function cards() {
+                return Array.prototype.slice.call(list.querySelectorAll('.rc-card'));
+            }
+            function updatePositions() {
+                cards().forEach(function (c, i) {
+                    c.querySelector('.rc-pos').textContent = i + 1;
+                });
+            }
+            function snap(els) {
+                var m = new Map();
+                els.forEach(function (el) { m.set(el, el.getBoundingClientRect().top); });
+                return m;
+            }
+            function flip(els, oldTops) {
+                els.forEach(function (el) {
+                    var oldTop = oldTops.get(el);
+                    if (oldTop === undefined) return;
+                    var delta = oldTop - el.getBoundingClientRect().top;
+                    if (Math.abs(delta) < 1) return;
+                    el.style.transition = 'none';
+                    el.style.transform = 'translateY(' + delta + 'px)';
+                    requestAnimationFrame(function () {
+                        requestAnimationFrame(function () {
+                            el.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                            el.style.transform = '';
+                        });
+                    });
+                });
+            }
+
+            updatePositions();
+
+            // --- Pointer-basiertes Drag-Sortieren (touch- & iOS-tauglich) ---
+            var dragEl = null, grabOffset = 0, pointerId = null;
+
+            function onDown(e) {
+                if (list.classList.contains('rc-revealed')) return;
+                var card = e.target.closest('.rc-card');
+                if (!card) return;
+                dragEl = card;
+                pointerId = e.pointerId;
+                grabOffset = e.clientY - card.getBoundingClientRect().top;
+                card.setPointerCapture(pointerId);
+                card.classList.add('rc-dragging');
+                e.preventDefault();
+            }
+
+            function onMove(e) {
+                if (!dragEl || e.pointerId !== pointerId) return;
+                e.preventDefault();
+
+                dragEl.style.transform = '';
+                var homeTop = dragEl.getBoundingClientRect().top;
+                dragEl.style.transform = 'translateY(' + (e.clientY - grabOffset - homeTop) + 'px)';
+
+                var dragMid = e.clientY - grabOffset + dragEl.offsetHeight / 2;
+                var sibs = cards().filter(function (c) { return c !== dragEl; });
+                var ref = null;
+                for (var i = 0; i < sibs.length; i++) {
+                    var r = sibs[i].getBoundingClientRect();
+                    if (dragMid < r.top + r.height / 2) { ref = sibs[i]; break; }
+                }
+                if (ref !== dragEl.nextSibling) {
+                    var oldTops = snap(sibs);
+                    list.insertBefore(dragEl, ref);
+                    flip(sibs, oldTops);
+                    dragEl.style.transform = '';
+                    var nt = dragEl.getBoundingClientRect().top;
+                    dragEl.style.transform = 'translateY(' + (e.clientY - grabOffset - nt) + 'px)';
+                    updatePositions();
+                }
+            }
+
+            function onUp(e) {
+                if (!dragEl) return;
+                dragEl.classList.remove('rc-dragging');
+                dragEl.style.transition = 'transform 0.2s ease';
+                dragEl.style.transform = '';
+                var el = dragEl;
+                setTimeout(function () { el.style.transition = ''; }, 220);
+                dragEl = null;
+                pointerId = null;
+            }
+
+            list.addEventListener('pointerdown', onDown);
+            list.addEventListener('pointermove', onMove);
+            list.addEventListener('pointerup', onUp);
+            list.addEventListener('pointercancel', onUp);
+
+            // --- Auswertung & Auflösung ---
+            btn.addEventListener('click', function () {
+                if (list.classList.contains('rc-revealed')) return;
+                var cs = cards();
+                var n = cs.length;
+                var exact = 0, dsum = 0;
+
+                cs.forEach(function (c, i) {
+                    var guessed = i + 1;                                  // wo DU sie hattest
+                    var truth = parseInt(c.getAttribute('data-true-rank'), 10);
+                    var d = guessed - truth;
+                    dsum += d * d;
+                    var status = c.querySelector('.rc-status');
+                    if (d === 0) {
+                        exact++;
+                        c.classList.add('rc-correct');
+                        status.innerHTML = '<span class="rc-status-icon">✓</span>'
+                                         + '<span class="rc-status-text">gleich gesehen</span>';
+                    } else {
+                        // Distanz-Färbung: 1 daneben = amber, 2+ daneben = rot
+                        c.classList.add('rc-wrong', Math.abs(d) === 1 ? 'rc-off-1' : 'rc-off-2');
+                        // Pfeil zeigt in Richtung deiner Platzierung; Zahl = dein Platz
+                        var arrow = d > 0 ? '↓' : '↑';
+                        status.innerHTML = '<span class="rc-status-icon">' + arrow + '</span>'
+                                         + '<span class="rc-status-text">du: #' + guessed + '</span>';
+                    }
+                });
+
+                var spearman = n > 1 ? 1 - (6 * dsum) / (n * (n * n - 1)) : 1;
+                var pct = Math.round(((spearman + 1) / 2) * 100);
+                document.getElementById('rcMatch').textContent = pct + '%';
+
+                var verdict;
+                if (pct >= 85)      verdict = 'Der Algorithmus tickt fast genau wie du. 🎯';
+                else if (pct >= 65) verdict = 'Ihr seht das ziemlich ähnlich.';
+                else if (pct >= 45) verdict = 'Teils gleiche Sicht, teils andere Meinung.';
+                else                verdict = 'Der Algorithmus sieht das ganz anders als du.';
+                document.getElementById('rcVerdict').textContent = verdict;
+
+                // In die Reihenfolge des Algorithmus sortieren (mit FLIP-Animation)
+                var oldTops = snap(cs);
+                cs.sort(function (a, b) {
+                    return a.getAttribute('data-true-rank') - b.getAttribute('data-true-rank');
+                });
+                cs.forEach(function (c) { list.appendChild(c); });
+                flip(cs, oldTops);
+
+                list.classList.add('rc-revealed');
+                document.getElementById('rcResult').classList.add('rc-show');
+                btn.disabled = true;
+                updatePositions();
+            });
+        })();
+        </script>
+        {% endif %}
+
         <script>
         function bonusScroll(dir) {
             var scroller = document.getElementById('bonusScroller');
@@ -303,42 +536,16 @@
         </script>
 
         {% if img_b64 %}
-        <div class="button-wrapper">
-            <button class="restart-btn" onclick="openShareCard()">
+        <div class="button-wrapper share-wrapper">
+            <button class="btn-primary" onclick="openShareCard()">
                 <i class="fa fa-share-alt"></i> Teilen-Karte
             </button>
-        </div>
-        {% endif %}
-
-        {% if short_code %}
-        <div class="compare-box">
-            <div class="compare-box-inner">
-                <p class="compare-label">Dein Code</p>
-                <div class="compare-code">{{ short_code }}</div>
-                <p class="compare-hint">Gib deinem Freund diesen Code</p>
-            </div>
-            <div class="compare-divider"></div>
-            <form class="compare-form" action="/compare/join" method="POST">
-                <p class="compare-label">Code deines Freundes</p>
-                <div class="compare-input-row">
-                    <input type="text" name="friend_code" maxlength="4"
-                           placeholder="- - - -"
-                           class="compare-input"
-                           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
-                           oninput="this.value=this.value.toUpperCase()" required>
-                    <button type="submit" class="compare-btn">
-                        <i class="fa fa-arrow-right"></i>
-                    </button>
-                </div>
-                {% if request.args.get('code_error') %}
-                <p class="compare-error">Code nicht gefunden – bitte nochmal prüfen.</p>
-                {% endif %}
-            </form>
+            <p class="share-hint"><i class="fa fa-qrcode"></i> Tipp: Den QR-Code auf der Karte kannst du am Laptop scannen.</p>
         </div>
         {% endif %}
 
         <div class="button-wrapper">
-            <a href="/" class="restart-btn">Nochmal versuchen</a>
+            <a href="/" class="btn-ghost">↺ &nbsp;Nochmal versuchen</a>
         </div>
     </div>
 
@@ -353,7 +560,9 @@
         var scratchCount = 0;
 
         function initCanvas() {
-            var dpr = window.devicePixelRatio || 1;
+            /* dpr auf 2 begrenzen: auf iPhones ist dpr oft 3, was den
+               getImageData-Puffer in checkReveal unnötig riesig macht. */
+            var dpr = Math.min(window.devicePixelRatio || 1, 2);
             var w   = wrapper.offsetWidth;
             var h   = wrapper.offsetHeight;
             canvas.width  = w * dpr;
@@ -369,9 +578,9 @@
 
             /* Dunkler Gradient */
             var grad = ctx.createLinearGradient(0, 0, w, h);
-            grad.addColorStop(0,   '#4a5060');
-            grad.addColorStop(0.4, '#5c6475');
-            grad.addColorStop(1,   '#2e3340');
+            grad.addColorStop(0,   '#222a3a');
+            grad.addColorStop(0.4, '#2c3550');
+            grad.addColorStop(1,   '#141926');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, w, h);
 
@@ -385,8 +594,8 @@
 
             /* Glow hinter Flugzeug */
             var glow = ctx.createRadialGradient(cx, cy - 28, 0, cx, cy - 28, 60);
-            glow.addColorStop(0, 'rgba(236,79,11,0.35)');
-            glow.addColorStop(1, 'rgba(236,79,11,0)');
+            glow.addColorStop(0, 'rgba(255,122,24,0.4)');
+            glow.addColorStop(1, 'rgba(255,122,24,0)');
             ctx.fillStyle = glow;
             ctx.beginPath();
             ctx.arc(cx, cy - 28, 60, 0, Math.PI * 2);
@@ -394,19 +603,19 @@
 
             /* Flugzeug (Text-Zeichen, kein Emoji → Farbe steuerbar) */
             ctx.fillStyle = 'rgba(255,255,255,0.92)';
-            ctx.font = Math.min(52, w * 0.12) + 'px sans-serif';
+            ctx.font = Math.round(Math.min(52, w * 0.12)) + "px 'Outfit', sans-serif";
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('✈', cx, cy - 28);
 
             /* CTA */
-            ctx.fillStyle = '#ec4f0b';
-            ctx.font = 'bold ' + Math.min(22, w * 0.055) + 'px sans-serif';
+            ctx.fillStyle = '#ff7a18';
+            ctx.font = '800 ' + Math.round(Math.min(22, w * 0.055)) + "px 'Sora', sans-serif";
             ctx.fillText('Hier freirubbeln!', cx, cy + 26);
 
             /* Untertitel */
             ctx.fillStyle = 'rgba(255,255,255,0.45)';
-            ctx.font = Math.min(13, w * 0.032) + 'px sans-serif';
+            ctx.font = Math.round(Math.min(13, w * 0.032)) + "px 'Outfit', sans-serif";
             ctx.fillText('Dein Reisetyp wartet auf dich', cx, cy + 52);
 
         }
@@ -434,12 +643,22 @@
         }
 
         function checkReveal() {
-            var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-            var transparent = 0;
-            for (var i = 3; i < data.length; i += 4) {
-                if (data[i] < 128) transparent++;
+            if (revealed) return;
+            var w = canvas.width, h = canvas.height;
+            var data = ctx.getImageData(0, 0, w, h).data;
+            /* Nur ein grobes Raster abtasten (jedes 4. Pixel pro Achse →
+               ~1/16 der Punkte). Spart auf dem Main-Thread Millionen
+               Iterationen, ohne das Ergebnis spürbar zu verfälschen. */
+            var step = 4;
+            var transparent = 0, total = 0;
+            for (var y = 0; y < h; y += step) {
+                var row = y * w * 4;
+                for (var x = 0; x < w; x += step) {
+                    total++;
+                    if (data[row + x * 4 + 3] < 128) transparent++;
+                }
             }
-            if (transparent / (canvas.width * canvas.height) > 0.42) revealAll();
+            if (transparent / total > 0.42) revealAll();
         }
 
         function revealAll() {
@@ -452,28 +671,29 @@
         }
 
         function launchConfetti() {
-            if (typeof confetti !== 'function') return;
-            var duration = 500;
-            var end = Date.now() + duration;
-            var colors = ['#ec4f0b', '#ff7340', '#ffffff', '#ffd700', '#ff4757'];
-            (function frame() {
-                confetti({
-                    particleCount: 6,
-                    angle: 60,
-                    spread: 55,
-                    origin: { x: 0, y: 0.65 },
-                    colors: colors
-                });
-                confetti({
-                    particleCount: 6,
-                    angle: 120,
-                    spread: 55,
-                    origin: { x: 1, y: 0.65 },
-                    colors: colors
-                });
-                if (Date.now() < end) requestAnimationFrame(frame);
-            })();
+            launchConfettiCard(wrapper);
         }
+
+        /* Konfetti nur in einem kleinen, fixierten Canvas rund um die
+           übergebene Karte. iOS muss pro Frame nur diese kleine Fläche neu
+           zeichnen statt der ganzen Seite → kein Ruckler. */
+        function launchConfettiCard(target) {
+            if (typeof confetti !== 'function' || !target) return;
+            var rect = target.getBoundingClientRect();
+            var pad = 90;
+            var cv = document.createElement('canvas');
+            cv.style.cssText = 'position:fixed;pointer-events:none;z-index:1500;'
+                + 'left:' + (rect.left - pad) + 'px;top:' + (rect.top - pad) + 'px;'
+                + 'width:' + (rect.width + pad * 2) + 'px;height:' + (rect.height + pad * 2) + 'px;';
+            document.body.appendChild(cv);
+            var fire = confetti.create(cv, { resize: true });
+            var colors = ['#ff7a18', '#ff2e63', '#ffffff', '#ffd166', '#00e5a0'];
+            fire({ particleCount: 90, spread: 80, startVelocity: 32,
+                   origin: { x: 0.5, y: 0.55 }, colors: colors });
+            setTimeout(function () { cv.remove(); }, 2500);
+        }
+        /* Auch fürs Konfetti bei Karte #1 (Scroll-Trigger) verfügbar machen. */
+        window.__cardConfetti = launchConfettiCard;
 
         window.addEventListener('load', initCanvas);
 
@@ -591,3 +811,8 @@
         }
     </script>
     {% endif %}
+
+    <script src="/static/ui.js"></script>
+
+</body>
+</html>

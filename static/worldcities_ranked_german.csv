@@ -88,7 +88,7 @@ Bled,Slowenien,Europa,86,54.1,SVN,4929.0,88.78,46.3688,14.114,Bled,Bled,Slovenia
 Hobart,Australien,Ozeanien,87,67.9,AUS,197451.0,23.38,-42.8806,147.325,Hobart,Hobart,Australia,Oceania,AU,Tasmania,admin,1036679838
 Jaipur,Indien,Asien,88,18.9,IND,3073350.0,710.89,26.9,75.8,Jaipur,Jaipur,India,Asia,IN,Rājasthān,admin,1356293537
 Brüssel,Belgien,Europa,89,68.6,BEL,1249597.0,103.92,50.8467,4.3525,Brussels,Brussels,Belgium,Europe,BE,Brussels-Capital Region,primary,1056469830
-Frieden,Bolivien,Südamerika,90,27.3,BOL,321073.0,323.5,-16.4958,-68.1333,La Paz,La Paz,Bolivia,South America,BO,La Paz,primary,1068000064
+La Paz,Bolivien,Südamerika,90,27.3,BOL,321073.0,323.5,-16.4958,-68.1333,La Paz,La Paz,Bolivia,South America,BO,La Paz,primary,1068000064
 Québec-Stadt,Kanada,Nordamerika,91,63.0,CAN,733156.0,11.56,46.8139,-71.2081,Québec City,Quebec City,Canada,North America,CA,Quebec,admin,1124823933
 Valparaiso,Chile,Südamerika,92,39.0,CHL,296655.0,0.33,-33.0461,-71.6197,Valparaíso,Valparaiso,Chile,South America,CL,Valparaíso,admin,1152337970
 Neapel,Italien,Europa,93,61.4,ITA,913462.0,10.99,40.8358,14.2486,Naples,Naples,Italy,Europe,IT,Campania,admin,1380646673
@@ -112,7 +112,7 @@ Dubai,Vereinigte Arabische Emirate,Asien,110,55.2,ARE,3331420.0,4.57,25.2631,55.
 Riga,Lettland,Europa,111,52.3,LVA,605273.0,8.66,56.9475,24.1069,Rīga,Riga,Latvia,Europe,LV,Rīga,primary,1428586192
 Asmara,Eritrea,Afrika,112,,ERI,963000.0,72.87,15.3358,38.9411,Asmara,Asmara,Eritrea,Africa,ER,Ma’ĭkel,primary,1232791236
 Kabul,Afghanistan,Asien,113,21.1,AFG,4273156.0,1060.07,34.5253,69.1783,Kabul,Kabul,Afghanistan,Asia,AF,Kābul,primary,1004993580
-Bad,Vereinigtes Königreich,Europa,114,67.8,GBR,94092.0,94.55,51.3814,-2.3597,Bath,Bath,United Kingdom,Europe,GB,Bath and North East Somerset,,1826611282
+Bath,Vereinigtes Königreich,Europa,114,67.8,GBR,94092.0,94.55,51.3814,-2.3597,Bath,Bath,United Kingdom,Europe,GB,Bath and North East Somerset,,1826611282
 Kopenhagen,Dänemark,Europa,115,78.9,DNK,1366301.0,7.85,55.6805,12.5615,Copenhagen,Copenhagen,Denmark,Europe,DK,Hovedstaden,primary,1208763942
 Macau,Macau,Asien,116,,MAC,568700.0,9.93,22.2006,113.5461,Macau,Macau,Macau,Asia,MO,,,1446227359
 Sofia,Bulgarien,Europa,117,41.6,BGR,1404116.0,228.04,42.6979,23.3217,Sofia,Sofia,Bulgaria,Europe,BG,Sofia-Grad,primary,1100762037
